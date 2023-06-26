@@ -1,6 +1,8 @@
 package chunkserver
 
 import (
+	"net"
+
 	log "github.com/Sirupsen/logrus"
 
 	"gfs"
