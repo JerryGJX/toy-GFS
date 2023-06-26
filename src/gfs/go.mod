@@ -1,3 +1,3 @@
-module github.com/JerryGJX/gfs
+module gfs
 
 go 1.18

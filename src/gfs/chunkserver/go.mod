@@ -1,3 +1,4 @@
-module github.com/JerryGJX/gfs/chunkserver
+module gfs/chunkserver
 
 go 1.18
+

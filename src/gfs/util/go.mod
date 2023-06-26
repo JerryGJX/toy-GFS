@@ -1,3 +1,3 @@
-module github.com/JerryGJX/gfs/util
+module gfs/util
 
 go 1.18

@@ -1,3 +1,3 @@
-module github.com/JerryGJX/gfs/master
+module gfs/master
 
 go 1.18
