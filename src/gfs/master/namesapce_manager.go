@@ -2,6 +2,7 @@ package master
 
 import (
 	"gfs"
+	"sync"
 )
 
 type namespaceManager struct {
@@ -30,8 +31,10 @@ func newNamespaceManager() *namespaceManager {
 
 // Create creates an empty file on path p. All parents should exist.
 func (nm *namespaceManager) Create(p gfs.Path) error {
+	return nil
 }
 
 // Mkdir creates a directory on path p. All parents should exist.
 func (nm *namespaceManager) Mkdir(p gfs.Path) error {
+	return nil
 }
