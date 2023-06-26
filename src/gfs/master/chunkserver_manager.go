@@ -3,6 +3,8 @@ package master
 import (
 	"gfs"
 	"gfs/util"
+	"sync"
+	"time"
 )
 
 // chunkServerManager manages chunkservers

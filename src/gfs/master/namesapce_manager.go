@@ -34,4 +34,4 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 
 // Mkdir creates a directory on path p. All parents should exist.
 func (nm *namespaceManager) Mkdir(p gfs.Path) error {
-}`
+}

@@ -6,4 +6,6 @@ use (
 	./src/gfs/client
 	./src/gfs/master
 	./src/gfs/util
+	./src/github.com/Sirupsen/logrus
+	
 )
