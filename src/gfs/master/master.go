@@ -136,3 +136,7 @@ func (m *Master) RPCGetFileInfo(args gfs.GetFileInfoArg, reply *gfs.GetFileInfoR
 func (m *Master) RPCGetChunkHandle(args gfs.GetChunkHandleArg, reply *gfs.GetChunkHandleReply) error {
 	return nil
 }
+
+func (m *Master) RPCList(args gfs.ListArg, reply *gfs.ListReply) error {
+	return nil
+}

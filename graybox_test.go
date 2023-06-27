@@ -65,10 +65,10 @@ func TestMkdirDeleteList(t *testing.T) {
 	ch <- m.RPCCreateFile(gfs.CreateFileArg{"/file1.txt"}, &gfs.CreateFileReply{})
 	ch <- m.RPCCreateFile(gfs.CreateFileArg{"/file2.txt"}, &gfs.CreateFileReply{})
 	ch <- m.RPCCreateFile(gfs.CreateFileArg{"/dir1/file3.txt"}, &gfs.CreateFileReply{})
-	ch <- m.RPCCreateFile(gfs.CreateFileArg{"/dir1/file4.txt"}, &gfs.CreateFileReply{})
-	ch <- m.RPCCreateFile(gfs.CreateFileArg{"/dir2/file5.txt"}, &gfs.CreateFileReply{})
+	ch <- m.RPCCreateFile(gfs.CreateFileArg{Path: "/dir1/file4.txt"}, &gfs.CreateFileReply{})
+	ch <- m.RPCCreateFile(gfs.CreateFileArg{Path: "/dir2/file5.txt"}, &gfs.CreateFileReply{})
 
-	err := m.RPCCreateFile(gfs.CreateFileArg{"/dir2/file5.txt"}, &gfs.CreateFileReply{})
+	err := m.RPCCreateFile(gfs.CreateFileArg{Path: "/dir2/file5.txt"}, &gfs.CreateFileReply{})
 	if err == nil {
 		t.Error("the same file has been created twice")
 	}
