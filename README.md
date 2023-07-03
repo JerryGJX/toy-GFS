@@ -2,99 +2,55 @@
 
 > a simple implementation of The Google File System
 
-## workspace setup
+## 1. workspace setup
 
-```
+```shell
 .
 ├── go.work
-├── go.work.sum
 └── toy-GFS
     ├── README.md
     ├── doc
+    │   ├── GFS_notes.md
+    │   ├── assets
+    │   │   ├── image-20230628142224412.png
+    │   │   └── image-20230628142256374.png
     │   └── ppca2016
-    ├── go.mod
-    ├── graybox_test.go
-    ├── llgfs.go
     ├── servers.txt
-    ├── src
-    │   ├── gfs
-    │   │   ├── chunkserver
-    │   │   │   ├── chunkserver.go
-    │   │   │   ├── download_buffer.go
-    │   │   │   └── go.mod
-    │   │   ├── client
-    │   │   │   ├── client.go
-    │   │   │   └── go.mod
-    │   │   ├── common.go
-    │   │   ├── go.mod
-    │   │   ├── master
-    │   │   │   ├── chunk_manager.go
-    │   │   │   ├── chunkserver_manager.go
-    │   │   │   ├── go.mod
-    │   │   │   ├── master.go
-    │   │   │   └── namesapce_manager.go
-    │   │   ├── rpc_structs.go
-    │   │   └── util
-    │   │       ├── array_set.go
-    │   │       ├── go.mod
-    │   │       └── util.go
-    │   ├── gfs_stress
-    │   │   ├── atomic_append_success.go
-    │   │   ├── consistency_write_success.go
-    │   │   ├── fault_tolerance.go
-    │   │   └── stress.go
-    │   └── github.com
-    │       └── Sirupsen
-    │           └── logrus
-    │               ├── CHANGELOG.md
-    │               ├── LICENSE
-    │               ├── README.md
-    │               ├── alt_exit.go
-    │               ├── alt_exit_test.go
-    │               ├── doc.go
-    │               ├── entry.go
-    │               ├── entry_test.go
-    │               ├── examples
-    │               │   ├── basic
-    │               │   │   └── basic.go
-    │               │   └── hook
-    │               │       └── hook.go
-    │               ├── exported.go
-    │               ├── formatter.go
-    │               ├── formatter_bench_test.go
-    │               ├── go.mod
-    │               ├── go.sum
-    │               ├── hook_test.go
-    │               ├── hooks
-    │               │   ├── syslog
-    │               │   │   ├── README.md
-    │               │   │   ├── syslog.go
-    │               │   │   └── syslog_test.go
-    │               │   └── test
-    │               │       ├── test.go
-    │               │       └── test_test.go
-    │               ├── hooks.go
-    │               ├── json_formatter.go
-    │               ├── json_formatter_test.go
-    │               ├── logger.go
-    │               ├── logrus.go
-    │               ├── logrus_test.go
-    │               ├── terminal_bsd.go
-    │               ├── terminal_linux.go
-    │               ├── terminal_notwindows.go
-    │               ├── terminal_solaris.go
-    │               ├── terminal_windows.go
-    │               ├── text_formatter.go
-    │               ├── text_formatter_test.go
-    │               └── writer.go
-    └── stress
-        ├── go.mod
-        ├── stress_center.go
-        └── stress_node.go
+    └── src
+        ├── gfs
+        │   ├── chunkserver
+        │   │   ├── chunkserver.go
+        │   │   └── download_buffer.go
+        │   ├── client
+        │   │   └── client.go
+        │   ├── cmd
+        │   │   └── main.go
+        │   ├── common.go
+        │   ├── go.mod
+        │   ├── go.sum
+        │   ├── graybox_test.go
+        │   ├── master
+        │   │   ├── chunk_manager.go
+        │   │   ├── chunkserver_manager.go
+        │   │   ├── master.go
+        │   │   └── namesapce_manager.go
+        │   ├── rpc_structs.go
+        │   └── util
+        │       ├── array_set.go
+        │       └── util.go
+        └── gfs_stress
+            ├── atomic_append_success.go
+            ├── cmd
+            │   ├── center
+            │   │   └── stress_center.go
+            │   └── node
+            │       └── stress_node.go
+            ├── consistency_write_success.go
+            ├── fault_tolerance.go
+            ├── go.mod
+            └── stress.go
 
 ```
-
-
 
 In order not to switch the `#GOPATH` , we use the `go module` and `go workspace` as alteration. 
 
@@ -105,13 +61,35 @@ Each directory is a go module, and all the used go module should be add to the `
 go 1.18
 use (
 	./toy-GFS/src/gfs
-	./toy-GFS/src/gfs/chunkserver
-	./toy-GFS/src/gfs/client
-	./toy-GFS/src/gfs/master
-	./toy-GFS/src/gfs/util
-	./toy-GFS/src/github.com/Sirupsen/logrus
-    ./toy-GFS
-	./toy-GFS/stress
+	./toy-GFS/src/gfs_stress
 )
 ```
+
+## 2. testing
+### 2.1. gray box test
+
+- how to run the test
+
+  ```bash
+  cd (prefix path)/toy-GFS/src/gfs
+  go test
+  ```
+
+  
+
+### 2.2. pressure test
+
+
+
+
+
+## 3. design
+
+### 3.1. major structure
+
+
+
+### 3.2. extra feature
+
+> design and arrangement that are differ from the description in the paper
 
