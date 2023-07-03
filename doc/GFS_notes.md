@@ -42,9 +42,19 @@ record append:
 实现：
 
 - client pushes the data to all replicas of the last chunk of the file
+
 - sends request to the primary  
+
 - primary 检查 append 会不会导致 chunk 超过限制 （64MB）
-  - 若会超出，则不会对当前的 chunk 进行修改，让 client 对下一个 chunk 尝试
+  - 若会超出，则不会对当前的 chunk 进行修改，让 client 对下一个 chunk 尝试 
+  
+    >  <font color = red> 问题：谁来申请新的 chunk</font> 
+    >
+    >  <font color = green> 目前猜测：client 向 master 发出申请</font>
+    >
+    >  <font color = blue> 理由：文中说让 client 尝试下一个 chunk 说明新开一个 chunk 对 client 不是透明的，所以大概率不是 chunkserver 发申请？</font> 
+  
+  - 
 
 ## 3. Architecture
 
