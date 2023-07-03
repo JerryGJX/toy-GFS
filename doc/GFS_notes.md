@@ -44,6 +44,7 @@ record append:
 - client pushes the data to all replicas of the last chunk of the file
 - sends request to the primary  
 - primary 检查 append 会不会导致 chunk 超过限制 （64MB）
+  - 若会超出，则不会对当前的 chunk 进行修改，让 client 对下一个 chunk 尝试
 
 ## 3. Architecture
 
