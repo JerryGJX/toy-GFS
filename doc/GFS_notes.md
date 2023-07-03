@@ -24,7 +24,22 @@
 
 > paper 3.4
 
+**feature:**
 
+- makes a copy of a file or a directory tree almost instantaneously  
+- minimizing any interruptions of ongoing mutations  
+
+**usage:**
+
+- quickly create branch copies of huge data sets
+- checkpointing  (<font color = red>before experimenting with changes that can later be committed or rolled back easily </font>)
+
+**implement:**
+
+> copy-on-write
+
+- master 收到 snapshot 指令
+- 
 
 ### 2.2. Record append
 
@@ -46,15 +61,27 @@ record append:
 - sends request to the primary  
 
 - primary 检查 append 会不会导致 chunk 超过限制 （64MB）
-  - 若会超出，则不会对当前的 chunk 进行修改，让 client 对下一个 chunk 尝试 
+  - 若会超出，则不会对当前的 chunk 进行修改，同时通知 secondaries 也不要修改，让 client 对下一个 chunk 尝试 
+  
+    - 即允许内碎片的产生，因此要求一次 append 的大小小于 1/4 来保证内碎片不会太多太大
   
     >  <font color = red> 问题：谁来申请新的 chunk</font> 
     >
-    >  <font color = green> 目前猜测：client 向 master 发出申请</font>
+    >  <font color = green>目前猜测：client 向 master 发出申请</font>
     >
-    >  <font color = blue> 理由：文中说让 client 尝试下一个 chunk 说明新开一个 chunk 对 client 不是透明的，所以大概率不是 chunkserver 发申请？</font> 
+    >  <font color = blue> 理由：文中说让 client 尝试下一个 chunk 说明新开一个 chunk 对 client 不是透明的，所以大概率不是 chunkserver 发申请？</font> 
   
-  - 
+  - 若不会超出，primary 写入 data，同时通知 secondaries 向 primary 指定的 offset 写入，写完后 secondaries 通知 primary，primary 通知 client append 成功
+  
+    - 如果 record append 在一个 replica 上失败了，那么 client 会重试
+  
+    - 这会导致同一个 chunk 的不同 replicas 可能存在不全同的情况（有的没写入，但是 primary 切换了？）
+  
+      > 不全同处是 inconsistent 的（因此也是 undefined），由 GFS 对于 inconsistent 的处理来解决 （paper 2.7.2）
+  
+    - GFS 保证 append success 时候一定在特定 chunk 的所有 replicas 的相同 offset 处有这份 data
+  
+    
 
 ## 3. Architecture
 
@@ -141,8 +168,6 @@ record append:
 
 
 
-
-
 **limitation:** the memory size of the master (not a serious limitation)
 
 - the chunk handler is 64 bytes for chunk of 64 MB
@@ -151,7 +176,7 @@ record append:
 
 
 
-#### metadata: operation Log
+#### 3.2.3. metadata: operation Log
 
 > a historical record of critical metadata changes
 
@@ -195,3 +220,50 @@ record append:
   - recovery code 检测并跳过不完整的 checkpoint
 
     > 理论上只需要保留最新的 checkpoint 和 log 文件即可，但一般为了容错会多保留一些
+
+
+
+
+
+
+
+### 3.3. consistency model
+
+#### 3.3.1. guarantees by GFS
+
+- file namespace mutation:
+
+  - atomic (by namespace lock)
+  - sequence (by master's operation log)
+
+- data mutation:
+
+  **concept:**
+
+  - consistent（一致性）：不论 client 从哪个 replica 上读取数据，读到的都一样
+
+    > **usage:** a file region is consistent
+
+  - defined：consistent 且 client 可以看到 mutation write 的整体
+
+    > **usage:** A region is defined after a file data mutation
+
+  ![image-20230703201904985](assets/image-20230703201904985.png)
+
+  > **concurrent success write：**consistent， undefined
+  >
+  > - all clients see the same data, but it may not reflect what any one mutation has written  
+  > - may consists of mingled（交融的） fragments from multiple mutations（突变）
+  >
+  > **failed mutation：**inconsistent，undefined
+  >
+  > - different clients may see different data at different times  
+  >
+  > **record append：**行为是 defined，但是 data 的散布产生 inconsistent（<font color = red>是这个意思吗？</font>）
+
+  GFS 保证 sequence of success mutation 后 chunk 是 defined 且有最后写入的 data：
+
+  - 对所有 replica 应用同样顺序的 mutation
+  - 用 chunk version number 去判断一个 chunk 有没有过时（stale）<font color = violet>（见 metadata）</font>，过时的 replicas 将不会参与之后的 mutation也不会在 client 向 master 询问的时候被给出（即这些 chunk 成为 garbage）<font color = violet>（见 garbage collection）</font>
+    - 由于 client 会 cache chunk location，所以有可能会读到 stale chunk
+
