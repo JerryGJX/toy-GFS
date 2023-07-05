@@ -265,5 +265,4 @@ record append:
 
   - 对所有 replica 应用同样顺序的 mutation
   - 用 chunk version number 去判断一个 chunk 有没有过时（stale）<font color = violet>（见 metadata）</font>，过时的 replicas 将不会参与之后的 mutation也不会在 client 向 master 询问的时候被给出（即这些 chunk 成为 garbage）<font color = violet>（见 garbage collection）</font>
-    - 由于 client 会 cache chunk location，所以有可能会读到 stale chunk
-
+    - 由于 client 会 cache chunk location，所以有可能会读到 stale chunk（窗口期由 cache 的有效时长和再次打开文件决定）
