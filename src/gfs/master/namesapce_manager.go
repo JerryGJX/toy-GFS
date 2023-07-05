@@ -6,7 +6,8 @@ import (
 )
 
 type namespaceManager struct {
-	root *nsTree
+	root        *nsTree
+	serialIndex int
 }
 
 type nsTree struct {
@@ -19,6 +20,29 @@ type nsTree struct {
 	// if it is a file
 	length int64
 	chunks int64
+}
+
+//for serializing the tree to array and deserializing it back
+type serialTreeNode struct {
+	isDir    bool
+	children map[string]int
+	Chunks   int64
+}
+
+func (nm *namespaceManager) tree2array(array []serialTreeNode, node *nsTree) int {
+
+}
+
+func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTree {
+	return nil
+}
+
+func (nm *namespaceManager) Serialize() []serialTreeNode {
+	return nil
+}
+
+func (nm *namespaceManager) Deserialize(array []serialTreeNode) error {
+	return nil
 }
 
 func newNamespaceManager() *namespaceManager {
@@ -37,4 +61,16 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 // Mkdir creates a directory on path p. All parents should exist.
 func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 	return nil
+}
+
+func (nm *namespaceManager) Delete(p gfs.Path) error {
+	return nil
+}
+
+func (nm *namespaceManager) Rename(oldPath gfs.Path, newPath gfs.Path) error {
+	return nil
+}
+
+func (nm *namespaceManager) List(p gfs.Path) ([]gfs.PathInfo, error) {
+	return nil, nil
 }
