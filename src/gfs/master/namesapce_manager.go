@@ -29,8 +29,18 @@ type serialTreeNode struct {
 	Chunks   int64
 }
 
-func (nm *namespaceManager) tree2array(array []serialTreeNode, node *nsTree) int {
-
+func (nm *namespaceManager) tree2array(array *[]serialTreeNode, node *nsTree) int {
+	n := serialTreeNode{isDir: node.isDir, Chunks: node.chunks}
+	if node.isDir {
+		n.children = make(map[string]int)
+		for k, v := range node.children {
+			n.children[k] = nm.tree2array(array, v)
+		}
+	}
+	*array = append(*array, n)
+	ret := nm.serialIndex
+	nm.serialIndex++
+	return ret
 }
 
 func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTree {
