@@ -52,11 +52,11 @@
 
 ```
 
-In order not to switch the `#GOPATH` , we use the `go module` and `go workspace` as alteration. 
+In order not to switch the `#GOPATH` , we use the `go module` and `go workspace` as alteration.
 
 Each directory is a go module, and all the used go module should be add to the `go.work` file.
 
-``` go
+```go
 //go.work
 go 1.18
 use (
@@ -66,6 +66,7 @@ use (
 ```
 
 ## 2. testing
+
 ### 2.1. gray box test
 
 - how to run the test
@@ -75,21 +76,17 @@ use (
   go test
   ```
 
-  
-
 ### 2.2. pressure test
-
-
-
-
 
 ## 3. design
 
 ### 3.1. major structure
 
-
-
 ### 3.2. extra feature
 
 > design and arrangement that are differ from the description in the paper
 
+1. requirement of the path in the GFS:
+   for all: start with `/`
+   for directory: end up with `/`
+   for file: end up with filename

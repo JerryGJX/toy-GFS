@@ -2,6 +2,7 @@ package master
 
 import (
 	"gfs"
+	"strings"
 	"sync"
 )
 
@@ -44,15 +45,37 @@ func (nm *namespaceManager) tree2array(array *[]serialTreeNode, node *nsTree) in
 }
 
 func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTree {
-	return nil
+	n := &nsTree{isDir: array[index].isDir, chunks: array[index].Chunks}
+	if array[index].isDir {
+		n.children = make(map[string]*nsTree)
+		for k, v := range array[index].children {
+			n.children[k] = nm.array2tree(array, v)
+		}
+	}
+	return n
 }
 
 func (nm *namespaceManager) Serialize() []serialTreeNode {
-	return nil
+	nm.root.RLock()
+	defer nm.root.RUnlock()
+	nm.serialIndex = 0
+	var ret []serialTreeNode
+	nm.tree2array(&ret, nm.root)
+	return ret
 }
 
 func (nm *namespaceManager) Deserialize(array []serialTreeNode) error {
+	nm.root.Lock()
+	defer nm.root.Unlock()
+	nm.root = nm.array2tree(array, len(array)-1)
 	return nil
+}
+
+
+
+
+func (nm *namespaceManager) lockParent(p gfs.Path) (*nsTree, error) {
+
 }
 
 func newNamespaceManager() *namespaceManager {

@@ -1,8 +1,47 @@
 package gfs
 
-import "time"
+import (
+	// "gfs"
+	"strings"
+	"time"
+)
 
 type Path string
+
+type SplitPath struct {
+	IsDir bool
+	Parts []string
+}
+
+func (sp *SplitPath) SplitPath2Path() Path {
+	ret := ""
+	if len(sp.Parts) == 0 {
+		return Path("/")
+	} else {
+		for _, part := range sp.Parts {
+			ret += "/" + part
+		}
+		if sp.IsDir {
+			ret += "/"
+		}
+	}
+	return Path(ret)
+}
+
+func (p Path) Path2SplitPath() *SplitPath {
+	ret := SplitPath{IsDir: false, Parts: []string{}}
+	ps := strings.Split(string(p), "/")
+	if(ps[0] == "") {
+		ps = ps[1:]
+	}
+	if(ps[len(ps)-1] == "") {
+		ps = ps[:len(ps)-1]
+		ret.IsDir = true
+	}
+	ret.Parts = ps
+	return &ret
+}
+
 type ServerAddress string
 type Offset int64
 type ChunkIndex int
