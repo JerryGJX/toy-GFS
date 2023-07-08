@@ -74,8 +74,23 @@ func (nm *namespaceManager) Deserialize(array []serialTreeNode) error {
 
 
 
-func (nm *namespaceManager) lockParent(p gfs.Path) (*nsTree, error) {
-
+func (nm *namespaceManager) lockParents(p gfs.Path) (*gfs.SplitPath, *nsTree, error) {
+	sp := p.Path2SplitPath()
+	ptr := nm.root
+	if len(sp.Parts) > 0 {
+		for _, part := range sp.Parts[:len(sp.Parts)-1] {
+			ptr.RLock()
+			if !ptr.isDir {
+				ptr.RUnlock()
+				return nil, gfs.ErrNotDir
+			}
+			if _, ok := ptr.children[part]; !ok {
+				ptr.RUnlock()
+				return nil, gfs.ErrNotExist
+			}
+			ptr = ptr.children[part]
+		}
+	}
 }
 
 func newNamespaceManager() *namespaceManager {
