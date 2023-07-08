@@ -1,8 +1,9 @@
 package master
 
 import (
+	"fmt"
 	"gfs"
-	"strings"
+	"log"
 	"sync"
 )
 
@@ -71,24 +72,40 @@ func (nm *namespaceManager) Deserialize(array []serialTreeNode) error {
 	return nil
 }
 
-
-
-
 func (nm *namespaceManager) lockParents(p gfs.Path) (*gfs.SplitPath, *nsTree, error) {
 	sp := p.Path2SplitPath()
 	ptr := nm.root
 	if len(sp.Parts) > 0 {
-		for _, part := range sp.Parts[:len(sp.Parts)-1] {
+		for i, part := range sp.Parts[:len(sp.Parts)-1] {
 			ptr.RLock()
-			if !ptr.isDir {
-				ptr.RUnlock()
-				return nil, gfs.ErrNotDir
+			c, ok := ptr.children[part]
+			if !ok {
+				return sp, ptr, fmt.Errorf("path %s not found", p)
 			}
-			if _, ok := ptr.children[part]; !ok {
-				ptr.RUnlock()
-				return nil, gfs.ErrNotExist
+			if i == len(sp.Parts)-1 {
+				
+			} else {
+				ptr = c
+				ptr.RLock()
 			}
-			ptr = ptr.children[part]
+		}
+	}
+	return sp, ptr, nil
+}
+
+
+func (nm *namespaceManager) unlockParents(sp *gfs.SplitPath) {
+	ptr := nm.root
+	if len(sp.Parts) > 0 {
+		ptr.RUnlock()
+		for _, part := range sp.Parts[:len(sp.Parts)-1] {
+			c, ok := ptr.children[part]
+			if !ok {
+				log.Fatal("[unlockParents] error: path not found")
+				return
+			}
+			ptr = c
+			ptr.RUnlock()
 		}
 	}
 }
@@ -103,6 +120,8 @@ func newNamespaceManager() *namespaceManager {
 
 // Create creates an empty file on path p. All parents should exist.
 func (nm *namespaceManager) Create(p gfs.Path) error {
+	sp := p.Path2SplitPath()
+
 	return nil
 }
 
