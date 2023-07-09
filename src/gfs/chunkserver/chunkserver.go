@@ -177,3 +177,7 @@ func (cs *ChunkServer) RPCSendCopy(args gfs.SendCopyArg, reply *gfs.SendCopyRepl
 func (cs *ChunkServer) RPCApplyCopy(args gfs.ApplyCopyArg, reply *gfs.ApplyCopyReply) error {
 	return nil 
 }
+
+func (cs *ChunkServer)RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.CheckVersionReply) error {
+	return nil 
+}

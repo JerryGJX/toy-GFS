@@ -164,3 +164,12 @@ type GetChunkHandleArg struct {
 type GetChunkHandleReply struct {
 	Handle ChunkHandle
 }
+
+type CheckVersionArg struct {
+	Handle  ChunkHandle
+	Version ChunkVersion
+}
+
+type CheckVersionReply struct {
+	Handle ChunkHandle
+}

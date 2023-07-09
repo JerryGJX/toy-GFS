@@ -3,6 +3,7 @@ package master
 import (
 	"fmt"
 	"gfs"
+
 	// "gfs/util"
 	"sync"
 	"time"
@@ -111,7 +112,7 @@ func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerA
 	}
 	ci.location = append(ci.location, addr)
 	return nil
-}
+}//diff
 
 // GetReplicas returns the replicas of a chunk
 func (cm *chunkManager) GetReplicas(handle gfs.ChunkHandle) ([]gfs.ServerAddress, error) {
@@ -126,13 +127,38 @@ func (cm *chunkManager) GetReplicas(handle gfs.ChunkHandle) ([]gfs.ServerAddress
 
 // GetChunk returns the chunk handle for (path, index).
 func (cm *chunkManager) GetChunk(path gfs.Path, index gfs.ChunkIndex) (gfs.ChunkHandle, error) {
-	return 0, nil
+	cm.RLock()
+	fi, ok := cm.file[path]
+	cm.RUnlock()
+	if !ok {
+		return -1, fmt.Errorf("[chunk_manager]{GetChunk} cannot find file %v[%v]", path, index)
+	}
+	if index < 0 || int(index) >= len(fi.handles) {
+		return -1, fmt.Errorf("[chunk_manager]{GetChunk} index out of range %v[%v]", path, index)
+	}
+	return fi.handles[index], nil
 }
 
 // GetLeaseHolder returns the chunkserver that hold the lease of a chunk
 // (i.e. primary) and expire time of the lease. If no one has a lease,
 // grants one to a replica it chooses.
 func (cm *chunkManager) GetLeaseHolder(handle gfs.ChunkHandle) (*gfs.Lease, error) {
+	cm.RLock()
+	ci, ok := cm.chunk[handle]
+	cm.RUnlock()
+	if !ok {
+		return nil, fmt.Errorf("[chunk_manager]{GetLeaseHolder} cannot find chunk %v", handle)
+	}
+	ci.RLock()
+	defer ci.RUnlock()
+
+	ret := &gfs.Lease{}
+	if ci.expire.Before(time.Now()) {// no one has a lease, grant one to a replica
+		//check virsion first
+		ci.version++
+		rpc_arg := gfs.ChunkVersionArg{handle, ci.version}
+		
+
 	return nil, nil
 }
 
