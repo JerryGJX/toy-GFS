@@ -72,27 +72,27 @@ func (nm *namespaceManager) Deserialize(array []serialTreeNode) error {
 	return nil
 }
 
-func (nm *namespaceManager) lockParents(p gfs.Path) (*gfs.SplitPath, *nsTree, error) {
-	sp := p.Path2SplitPath()
+func (nm *namespaceManager) lockParents(sp *gfs.SplitPath, retSelf bool) (*nsTree, error) {
 	ptr := nm.root
 	if len(sp.Parts) > 0 {
-		for i, part := range sp.Parts[:len(sp.Parts)-1] {
+		for i, part := range sp.Parts[:len(sp.Parts)] {
 			ptr.RLock()
 			c, ok := ptr.children[part]
 			if !ok {
-				return sp, ptr, fmt.Errorf("path %s not found", p)
+				return ptr, fmt.Errorf("path %s not found", string(sp.SplitPath2Path()))
 			}
 			if i == len(sp.Parts)-1 {
-				
+				if retSelf {
+					ptr = c //in order to omit the process of go down in interface
+				}
 			} else {
 				ptr = c
 				ptr.RLock()
 			}
 		}
 	}
-	return sp, ptr, nil
+	return ptr, nil
 }
-
 
 func (nm *namespaceManager) unlockParents(sp *gfs.SplitPath) {
 	ptr := nm.root
@@ -121,23 +121,89 @@ func newNamespaceManager() *namespaceManager {
 // Create creates an empty file on path p. All parents should exist.
 func (nm *namespaceManager) Create(p gfs.Path) error {
 	sp := p.Path2SplitPath()
+	if sp.IsDir {
+		return fmt.Errorf("[Create] error: %s is a directory", p)
+	}
+	filename := sp.Parts[len(sp.Parts)-1]
+	parent_sp, err := sp.ParentSp()
+	if err != nil {
+		return err
+	}
+	ptr, err := nm.lockParents(parent_sp, true)
+	defer nm.unlockParents(parent_sp)
+	if err != nil {
+		return err
+	}
+	ptr.Lock()
+	defer ptr.Unlock()
 
+	if _, ok := ptr.children[filename]; ok {
+		return fmt.Errorf("[Create] error: %s already exists", p)
+	}
+
+	ptr.children[filename] = &nsTree{isDir: false, length: 0, chunks: 0}
 	return nil
 }
 
 // Mkdir creates a directory on path p. All parents should exist.
 func (nm *namespaceManager) Mkdir(p gfs.Path) error {
+	sp := p.Path2SplitPath()
+	if !sp.IsDir {
+		return fmt.Errorf("[Mkdir] error: %s is a file", p)
+	}
+	parent_sp, err := sp.ParentSp()
+	if err != nil {
+		return err
+	}
+	filename := sp.Parts[len(sp.Parts)-1]
+	ptr, err := nm.lockParents(parent_sp, true)
+	defer nm.unlockParents(parent_sp)
+	if err != nil {
+		return err
+	}
+	ptr.Lock()
+	defer ptr.Unlock()
+
+	if _, ok := ptr.children[filename]; ok {
+		return fmt.Errorf("[Mkdir] error: %s already exists", p)
+	}
+
+	ptr.children[filename] = &nsTree{isDir: true, children: make(map[string]*nsTree)}
 	return nil
 }
 
 func (nm *namespaceManager) Delete(p gfs.Path) error {
+	sp := p.Path2SplitPath()
+	if sp.IsDir {
+		return fmt.Errorf("[Create] error: %s is a directory", p)
+	}
+	filename := sp.Parts[len(sp.Parts)-1]
+	parent_sp, err := sp.ParentSp()
+	if err != nil {
+		return err
+	}
+	ptr, err := nm.lockParents(parent_sp, true)
+	defer nm.unlockParents(parent_sp)
+	if err != nil {
+		return err
+	}
+	ptr.Lock()
+	defer ptr.Unlock()
+
+	//rename the file to be deleted
+	target := ptr.children[filename]
+	delete(ptr.children, filename)
+	ptr.children[gfs.DeletedFilePrefix+filename] = target
+
 	return nil
 }
 
 func (nm *namespaceManager) Rename(oldPath gfs.Path, newPath gfs.Path) error {
+	log.Fatal("[Rename] not implemented")
 	return nil
 }
 
 func (nm *namespaceManager) List(p gfs.Path) ([]gfs.PathInfo, error) {
+	log.Fatal("[List] not implemented")
 	return nil, nil
 }

@@ -2,6 +2,7 @@ package gfs
 
 import (
 	// "gfs"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -28,13 +29,21 @@ func (sp *SplitPath) SplitPath2Path() Path {
 	return Path(ret)
 }
 
+func (sp *SplitPath) ParentSp() (*SplitPath, error) {
+	if len(sp.Parts) == 0 {
+		return nil, fmt.Errorf("[ParentSp] error: root has no parent")
+	} else {
+		return &SplitPath{IsDir: true, Parts: sp.Parts[:len(sp.Parts)-1]}, nil
+	}
+}
+
 func (p Path) Path2SplitPath() *SplitPath {
 	ret := SplitPath{IsDir: false, Parts: []string{}}
 	ps := strings.Split(string(p), "/")
-	if(ps[0] == "") {
+	if ps[0] == "" {
 		ps = ps[1:]
 	}
-	if(ps[len(ps)-1] == "") {
+	if ps[len(ps)-1] == "" {
 		ps = ps[:len(ps)-1]
 		ret.IsDir = true
 	}
@@ -108,4 +117,6 @@ const (
 
 	DownloadBufferExpire = 2 * time.Minute
 	DownloadBufferTick   = 10 * time.Second
+
+	DeletedFilePrefix = "_delete_"
 )
