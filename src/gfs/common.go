@@ -8,11 +8,51 @@ import (
 )
 
 type Path string
+type ServerAddress string
+type Offset int64
+type ChunkIndex int
+type ChunkHandle int64
+type ChunkVersion int64
+type Checksum int64
+type MutationType int
+
+
+type DataBufferID struct {
+	Handle    ChunkHandle
+	TimeStamp int
+}
+
+type PathInfo struct {
+	Name string
+
+	// if it is a directory
+	IsDir bool
+
+	// if it is a file
+	Length int64
+	Chunks int64
+}
 
 type SplitPath struct {
 	IsDir bool
 	Parts []string
 }
+
+type Lease struct {
+	Primary     ServerAddress
+	Expire      time.Time
+	Secondaries []ServerAddress
+}
+
+type PersistentChunkInfo struct {
+	Handle   ChunkHandle
+	Length   Offset
+	Version  ChunkVersion
+	Checksum Checksum
+}
+
+
+
 
 func (sp *SplitPath) SplitPath2Path() Path {
 	ret := ""
@@ -51,29 +91,10 @@ func (p Path) Path2SplitPath() *SplitPath {
 	return &ret
 }
 
-type ServerAddress string
-type Offset int64
-type ChunkIndex int
-type ChunkHandle int64
-type ChunkVersion int64
 
-type DataBufferID struct {
-	Handle    ChunkHandle
-	TimeStamp int
-}
 
-type PathInfo struct {
-	Name string
 
-	// if it is a directory
-	IsDir bool
 
-	// if it is a file
-	Length int64
-	Chunks int64
-}
-
-type MutationType int
 
 const (
 	MutationWrite = iota

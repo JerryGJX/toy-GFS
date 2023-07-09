@@ -3,8 +3,9 @@ package master
 import (
 	"fmt"
 	"gfs"
-	"log"
 	"sync"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type namespaceManager struct {
@@ -101,7 +102,7 @@ func (nm *namespaceManager) unlockParents(sp *gfs.SplitPath) {
 		for _, part := range sp.Parts[:len(sp.Parts)-1] {
 			c, ok := ptr.children[part]
 			if !ok {
-				log.Fatal("[unlockParents] error: path not found")
+				log.Fatal("[namespace_manager]{unlockParents} error: path not found")
 				return
 			}
 			ptr = c
@@ -115,6 +116,7 @@ func newNamespaceManager() *namespaceManager {
 		root: &nsTree{isDir: true,
 			children: make(map[string]*nsTree)},
 	}
+	log.Info("#################### new namespace manager ####################")
 	return nm
 }
 
@@ -122,7 +124,7 @@ func newNamespaceManager() *namespaceManager {
 func (nm *namespaceManager) Create(p gfs.Path) error {
 	sp := p.Path2SplitPath()
 	if sp.IsDir {
-		return fmt.Errorf("[Create] error: %s is a directory", p)
+		return fmt.Errorf("[namespace_manager]{Create} error: %s is a directory", p)
 	}
 	filename := sp.Parts[len(sp.Parts)-1]
 	parent_sp, err := sp.ParentSp()
@@ -138,7 +140,7 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 	defer ptr.Unlock()
 
 	if _, ok := ptr.children[filename]; ok {
-		return fmt.Errorf("[Create] error: %s already exists", p)
+		return fmt.Errorf("[namespace_manager]{Create} error: %s already exists", p)
 	}
 
 	ptr.children[filename] = &nsTree{isDir: false, length: 0, chunks: 0}
@@ -149,7 +151,7 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 	sp := p.Path2SplitPath()
 	if !sp.IsDir {
-		return fmt.Errorf("[Mkdir] error: %s is a file", p)
+		return fmt.Errorf("[namespace_manager]{Mkdir} error: %s is a file", p)
 	}
 	parent_sp, err := sp.ParentSp()
 	if err != nil {
@@ -165,17 +167,17 @@ func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 	defer ptr.Unlock()
 
 	if _, ok := ptr.children[filename]; ok {
-		return fmt.Errorf("[Mkdir] error: %s already exists", p)
+		return fmt.Errorf("[namespace_manager]{Mkdir} error: %s already exists", p)
 	}
 
 	ptr.children[filename] = &nsTree{isDir: true, children: make(map[string]*nsTree)}
 	return nil
 }
 
-func (nm *namespaceManager) Delete(p gfs.Path) error {
+func (nm *namespaceManager) Delete(p gfs.Path) error {//diff
 	sp := p.Path2SplitPath()
 	if sp.IsDir {
-		return fmt.Errorf("[Create] error: %s is a directory", p)
+		return fmt.Errorf("[namespace_manager]{Create} error: %s is a directory", p)
 	}
 	filename := sp.Parts[len(sp.Parts)-1]
 	parent_sp, err := sp.ParentSp()
@@ -199,11 +201,11 @@ func (nm *namespaceManager) Delete(p gfs.Path) error {
 }
 
 func (nm *namespaceManager) Rename(oldPath gfs.Path, newPath gfs.Path) error {
-	log.Fatal("[Rename] not implemented")
+	log.Fatal("[namespace_manager]{Rename} not implemented")
 	return nil
 }
 
 func (nm *namespaceManager) List(p gfs.Path) ([]gfs.PathInfo, error) {
-	log.Fatal("[List] not implemented")
+	log.Fatal("[namespace_manager]{List} not implemented")
 	return nil, nil
 }
