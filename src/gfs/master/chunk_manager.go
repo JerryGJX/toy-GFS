@@ -253,7 +253,6 @@ func (cm *chunkManager) CreateChunk(path gfs.Path, addrs []gfs.ServerAddress) (g
 	}
 }
 
-
 //RemoveChunk removes chunks from a chunk manager
 func (cm *chunkManager) RemoveChunk(handles []gfs.ChunkHandle, server gfs.ServerAddress) error {
 	errList := ""
@@ -265,10 +264,35 @@ func (cm *chunkManager) RemoveChunk(handles []gfs.ChunkHandle, server gfs.Server
 		ci.Lock()
 		for i, addr := range ci.location {
 			if addr == server {
-				ci.location = append(ci.location[:i], ci.location[i+1:]...)
+				ci.location = append(ci.location[:i], ci.location[i+1:]...) //remove the server from the location list
 			}
 		}
 		ci.expire = time.Now()
-		num
+		num := len(ci.location)
+		ci.Unlock()
+
+		if num < gfs.MinimumNumReplicas {
+			cm.replicaNeededList = append(cm.replicaNeededList, handle)
+			if num == 0 {
+				errList += fmt.Sprintf("[chunk_manager]{RemoveChunk} chunk %v has no replica\n", handle)
+			}
+		}
+	}
+	if errList == "" {
+		return nil
+	} else {
+		return fmt.Errorf(errList)
+	}
+}
+
+// GetReplicaNeededList returns the list of chunks that need more replicas
+func (cm *chunkManager) GetReplicaNeededList() []gfs.ChunkHandle {
+	cm.Lock()
+	defer cm.Unlock()
+
+	if len(cm.replicaNeededList) == 0 {
+		return nil
+	} else {
+		return cm.replicaNeededList
 	}
 }

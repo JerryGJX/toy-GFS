@@ -47,7 +47,10 @@ func (nm *namespaceManager) tree2array(array *[]serialTreeNode, node *nsTree) in
 }
 
 func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTree {
-	n := &nsTree{isDir: array[index].isDir, chunks: array[index].Chunks}
+	n := &nsTree{
+		isDir:  array[index].isDir,
+		chunks: array[index].Chunks,
+	}
 	if array[index].isDir {
 		n.children = make(map[string]*nsTree)
 		for k, v := range array[index].children {
@@ -143,7 +146,7 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 		return fmt.Errorf("[namespace_manager]{Create} error: %s already exists", p)
 	}
 
-	ptr.children[filename] = &nsTree{isDir: false, length: 0, chunks: 0}
+	ptr.children[filename] = new(nsTree)
 	return nil
 }
 
@@ -174,7 +177,7 @@ func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 	return nil
 }
 
-func (nm *namespaceManager) Delete(p gfs.Path) error {//diff
+func (nm *namespaceManager) Delete(p gfs.Path) error { //diff
 	sp := p.Path2SplitPath()
 	if sp.IsDir {
 		return fmt.Errorf("[namespace_manager]{Create} error: %s is a directory", p)
