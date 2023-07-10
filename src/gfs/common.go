@@ -41,7 +41,7 @@ type SplitPath struct {
 type Lease struct {
 	Primary     ServerAddress
 	Expire      time.Time
-	Secondaries []ServerAddress
+	Secondaries []ServerAddress//since each time refresh a lease, the secondaries will be updated, so we can store it in lease
 }
 
 type PersistentChunkInfo struct {
@@ -140,4 +140,6 @@ const (
 	DownloadBufferTick   = 10 * time.Second
 
 	DeletedFilePrefix = "_delete_"
+
+	LeaseExpireInterval = 3 * time.Second
 )

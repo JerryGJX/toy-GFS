@@ -171,5 +171,5 @@ type CheckVersionArg struct {
 }
 
 type CheckVersionReply struct {
-	Handle ChunkHandle
+	Stale bool
 }

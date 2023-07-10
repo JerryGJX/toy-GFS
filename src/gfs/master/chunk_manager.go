@@ -3,6 +3,7 @@ package master
 import (
 	"fmt"
 	"gfs"
+	"gfs/util"
 
 	// "gfs/util"
 	"sync"
@@ -112,7 +113,7 @@ func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerA
 	}
 	ci.location = append(ci.location, addr)
 	return nil
-}//diff
+} //diff
 
 // GetReplicas returns the replicas of a chunk
 func (cm *chunkManager) GetReplicas(handle gfs.ChunkHandle) ([]gfs.ServerAddress, error) {
@@ -153,21 +154,121 @@ func (cm *chunkManager) GetLeaseHolder(handle gfs.ChunkHandle) (*gfs.Lease, erro
 	defer ci.RUnlock()
 
 	ret := &gfs.Lease{}
-	if ci.expire.Before(time.Now()) {// no one has a lease, grant one to a replica
+	if ci.expire.Before(time.Now()) { // no one has a lease, grant one to a replica
 		//check virsion first
 		ci.version++
-		rpc_arg := gfs.ChunkVersionArg{handle, ci.version}
-		
+		rpc_arg := gfs.CheckVersionArg{Handle: handle, Version: ci.version}
 
-	return nil, nil
+		var wg sync.WaitGroup
+		var freshList []gfs.ServerAddress
+		var lock sync.Mutex //for freshList
+		for _, addr := range ci.location {
+			wg.Add(1)
+			go func(addr gfs.ServerAddress) {
+				defer wg.Done()
+				var rpc_reply gfs.CheckVersionReply
+				err := util.Call(addr, "ChunkServer.RPCCheckVersion", rpc_arg, &rpc_reply)
+				if err == nil && !rpc_reply.Stale {
+					lock.Lock()
+					freshList = append(freshList, addr)
+					lock.Unlock()
+				} else {
+					log.Warningf("[chunk_manager]{GetLeaseHolder} chunk %v staled", handle)
+				}
+			}(addr)
+		}
+		wg.Wait()
+
+		if len(freshList) == 0 {
+			log.Error("[chunk_manager]{GetLeaseHolder} no replica available")
+			return nil, fmt.Errorf("[chunk_manager]{GetLeaseHolder} no replica available")
+		}
+		ci.location = freshList
+		ci.primary = freshList[0]
+		ci.expire = time.Now().Add(gfs.LeaseExpireInterval)
+	}
+	ret.Primary = ci.primary
+	ret.Expire = ci.expire
+	for _, addr := range ci.location {
+		if addr != ci.primary {
+			ret.Secondaries = append(ret.Secondaries, addr)
+		}
+	}
+	return ret, nil
 }
 
 // ExtendLease extends the lease of chunk if the lease holder is primary.
 func (cm *chunkManager) ExtendLease(handle gfs.ChunkHandle, primary gfs.ServerAddress) error {
+	cm.Lock()
+	defer cm.Unlock()
+	ci, ok := cm.chunk[handle]
+	if !ok {
+		return fmt.Errorf("[chunk_manager]{ExtendLease} cannot find chunk %v", handle)
+	}
+	present := time.Now()
+	if ci.primary != primary && ci.expire.After(present) {
+		return fmt.Errorf("[chunk_manager]{ExtendLease} %v is not primary of chunk %v", primary, handle)
+	}
+	ci.primary = primary
+	ci.expire = present.Add(gfs.LeaseExpireInterval)
 	return nil
 }
 
 // CreateChunk creates a new chunk for path.
-func (cm *chunkManager) CreateChunk(path gfs.Path, addrs []gfs.ServerAddress) (gfs.ChunkHandle, error) {
-	return 0, nil
+func (cm *chunkManager) CreateChunk(path gfs.Path, addrs []gfs.ServerAddress) (gfs.ChunkHandle, []gfs.ServerAddress, error) {
+	cm.Lock()
+	defer cm.Unlock()
+
+	handle := cm.numChunkHandle
+	cm.numChunkHandle++
+
+	fi, ok := cm.file[path]
+	if !ok {
+		fi = new(fileInfo)
+		cm.file[path] = fi
+	}
+	fi.handles = append(fi.handles, handle)
+
+	//update chunk info
+	ci := &chunkInfo{path: path}
+	cm.chunk[handle] = ci
+
+	//call chunkserver to create chunk
+	var errorInfo string
+	var successList []gfs.ServerAddress
+	for _, addr := range addrs {
+		var rpc_reply gfs.CreateChunkReply
+		err := util.Call(addr, "ChunkServer.RPCCreateChunk", handle, &rpc_reply)
+		if err != nil {
+			errorInfo += fmt.Sprintf("%v: %v\n", addr, err)
+		} else {
+			ci.location = append(ci.location, addr)
+			successList = append(successList, addr)
+		}
+	}
+	if errorInfo == "" {
+		return handle, successList, nil
+	} else {
+		return handle, successList, fmt.Errorf("[chunk_manager]{CreateChunk} %v", errorInfo)
+	}
+}
+
+
+//RemoveChunk removes chunks from a chunk manager
+func (cm *chunkManager) RemoveChunk(handles []gfs.ChunkHandle, server gfs.ServerAddress) error {
+	errList := ""
+	for _, handle := range handles {
+		cm.RLock()
+		ci := cm.chunk[handle]
+		cm.RUnlock()
+
+		ci.Lock()
+		for i, addr := range ci.location {
+			if addr == server {
+				ci.location = append(ci.location[:i], ci.location[i+1:]...)
+			}
+		}
+		ci.expire = time.Now()
+		num
+	}
 }
