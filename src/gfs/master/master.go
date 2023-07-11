@@ -2,10 +2,14 @@ package master
 
 import (
 	// "fmt"
-	log "github.com/sirupsen/logrus"
+	"encoding/gob"
 	"net"
 	"net/rpc"
+	"os"
+	"path"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"gfs"
 	// "gfs/util"
@@ -21,6 +25,40 @@ type Master struct {
 	nm  *namespaceManager
 	cm  *chunkManager
 	csm *chunkServerManager
+}
+
+const (
+	MetaDataFileName = "master_meta"
+	filePerm = 0755
+)
+
+type PersistentMetaData struct {
+	SeNamespace []serialTreeNode
+	SeChunkInfo []serialChunkInfo
+}
+
+func (m *Master) loadMetaData() error {
+	filePath := path.Join(m.serverRoot, MetaDataFileName)
+	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
+	if err!=nil {
+		return err
+	}
+	defer file.Close()
+
+	var metadata PersistentMetaData
+
+	err := gob.NewDecoder(file).Decode(&metadata)
+
+	// m.nm.Deserialize()
+	return err
+}
+
+func (m *Master) initMetaData() {
+	m.nm = newNamespaceManager()
+	m.cm = newChunkManager()
+	m.csm = newChunkServerManager()
+	m.loadMetaData()
+	return
 }
 
 // NewAndServe starts a master and returns the pointer to it.
