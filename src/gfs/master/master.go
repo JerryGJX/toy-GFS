@@ -47,10 +47,13 @@ func (m *Master) loadMetaData() error {
 
 	var metadata PersistentMetaData
 
-	err := gob.NewDecoder(file).Decode(&metadata)
-
-	// m.nm.Deserialize()
-	return err
+	err = gob.NewDecoder(file).Decode(&metadata)
+	if err!=nil {
+		return err
+	}
+	m.nm.Deserialize(metadata.SeNamespace)
+	m.cm.Deserialize(metadata.SeChunkInfo)
+	return nil
 }
 
 func (m *Master) initMetaData() {
