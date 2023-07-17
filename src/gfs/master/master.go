@@ -56,6 +56,23 @@ func (m *Master) loadMetaData() error {
 	return nil
 }
 
+func (m *Master) storeMetaData() error{
+	filePath := path.Join(m.serverRoot, MetaDataFileName)
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
+	if err!=nil {
+		return err
+	}
+	defer file.Close()
+	
+	var metadata PersistentMetaData
+
+	metadata.SeNamespace = m.nm.Serialize()
+	metadata.SeChunkInfo = m.cm.Serialize()
+
+	err = gob.NewEncoder(file).Encode(metadata)
+	return err
+}
+
 func (m *Master) initMetaData() {
 	m.nm = newNamespaceManager()
 	m.cm = newChunkManager()
@@ -72,10 +89,6 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 		shutdown:   make(chan struct{}),
 	}
 
-	m.nm = newNamespaceManager()
-	m.cm = newChunkManager()
-	m.csm = newChunkServerManager()
-
 	rpcs := rpc.NewServer()
 	rpcs.Register(m)
 	l, e := net.Listen("tcp", string(m.address))
@@ -84,6 +97,9 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 		log.Exit(1)
 	}
 	m.l = l
+
+	// Initialize metadata
+	m.initMetaData()
 
 	// RPC Handler
 	go func() {
