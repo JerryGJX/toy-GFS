@@ -16,8 +16,8 @@ import (
 type chunkManager struct {
 	sync.RWMutex
 
-	chunk map[gfs.ChunkHandle]*chunkInfo
-	file  map[gfs.Path]*fileInfo
+	chunks map[gfs.ChunkHandle]*chunkInfo
+	files  map[gfs.Path]*fileInfo
 
 	replicaNeededList []gfs.ChunkHandle // chunks that need more replicas
 	numChunkHandle    gfs.ChunkHandle
@@ -48,13 +48,13 @@ func (cm *chunkManager) Serialize() []serialChunkInfo {
 	defer cm.RUnlock()
 
 	var ret []serialChunkInfo
-	for path, fi := range cm.file {
+	for path, fi := range cm.files {
 		var pcis []gfs.PersistentChunkInfo
 		for _, handle := range fi.handles {
 			pcis = append(pcis, gfs.PersistentChunkInfo{
 				Handle:   handle,
 				Length:   0,
-				Version:  cm.chunk[handle].version,
+				Version:  cm.chunks[handle].version,
 				Checksum: 0, //todo
 			})
 		}
@@ -73,22 +73,22 @@ func (cm *chunkManager) Deserialize(scis []serialChunkInfo) error {
 		fi := new(fileInfo)
 		for _, pci := range sci.Info {
 			fi.handles = append(fi.handles, pci.Handle)
-			cm.chunk[pci.Handle] = &chunkInfo{
+			cm.chunks[pci.Handle] = &chunkInfo{
 				expire:   present,
 				version:  pci.Version,
 				checksum: pci.Checksum,
 			}
 		}
 		cm.numChunkHandle += gfs.ChunkHandle(len(sci.Info))
-		cm.file[sci.Path] = fi
+		cm.files[sci.Path] = fi
 	}
 	return nil
 }
 
 func newChunkManager() *chunkManager {
 	cm := &chunkManager{
-		chunk: make(map[gfs.ChunkHandle]*chunkInfo),
-		file:  make(map[gfs.Path]*fileInfo),
+		chunks: make(map[gfs.ChunkHandle]*chunkInfo),
+		files:  make(map[gfs.Path]*fileInfo),
 	}
 	log.Info("################# new chunk manager #################")
 	return cm
@@ -99,10 +99,10 @@ func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerA
 	var ci *chunkInfo
 	var ok bool
 	if isLocked {
-		ci, ok = cm.chunk[handle]
+		ci, ok = cm.chunks[handle]
 	} else {
 		cm.RLock()
-		ci, ok = cm.chunk[handle]
+		ci, ok = cm.chunks[handle]
 		cm.RUnlock()
 
 		ci.Lock()
@@ -118,7 +118,7 @@ func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerA
 // GetReplicas returns the replicas of a chunk
 func (cm *chunkManager) GetReplicas(handle gfs.ChunkHandle) ([]gfs.ServerAddress, error) {
 	cm.RLock()
-	ci, ok := cm.chunk[handle]
+	ci, ok := cm.chunks[handle]
 	cm.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("[chunk_manager]{GetReplicas} cannot find chunk %v", handle)
@@ -129,7 +129,7 @@ func (cm *chunkManager) GetReplicas(handle gfs.ChunkHandle) ([]gfs.ServerAddress
 // GetChunk returns the chunk handle for (path, index).
 func (cm *chunkManager) GetChunk(path gfs.Path, index gfs.ChunkIndex) (gfs.ChunkHandle, error) {
 	cm.RLock()
-	fi, ok := cm.file[path]
+	fi, ok := cm.files[path]
 	cm.RUnlock()
 	if !ok {
 		return -1, fmt.Errorf("[chunk_manager]{GetChunk} cannot find file %v[%v]", path, index)
@@ -145,7 +145,7 @@ func (cm *chunkManager) GetChunk(path gfs.Path, index gfs.ChunkIndex) (gfs.Chunk
 // grants one to a replica it chooses.
 func (cm *chunkManager) GetLeaseHolder(handle gfs.ChunkHandle) (*gfs.Lease, error) {
 	cm.RLock()
-	ci, ok := cm.chunk[handle]
+	ci, ok := cm.chunks[handle]
 	cm.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("[chunk_manager]{GetLeaseHolder} cannot find chunk %v", handle)
@@ -201,7 +201,7 @@ func (cm *chunkManager) GetLeaseHolder(handle gfs.ChunkHandle) (*gfs.Lease, erro
 func (cm *chunkManager) ExtendLease(handle gfs.ChunkHandle, primary gfs.ServerAddress) error {
 	cm.Lock()
 	defer cm.Unlock()
-	ci, ok := cm.chunk[handle]
+	ci, ok := cm.chunks[handle]
 	if !ok {
 		return fmt.Errorf("[chunk_manager]{ExtendLease} cannot find chunk %v", handle)
 	}
@@ -222,16 +222,16 @@ func (cm *chunkManager) CreateChunk(path gfs.Path, addrs []gfs.ServerAddress) (g
 	handle := cm.numChunkHandle
 	cm.numChunkHandle++
 
-	fi, ok := cm.file[path]
+	fi, ok := cm.files[path]
 	if !ok {
 		fi = new(fileInfo)
-		cm.file[path] = fi
+		cm.files[path] = fi
 	}
 	fi.handles = append(fi.handles, handle)
 
 	//update chunk info
 	ci := &chunkInfo{path: path}
-	cm.chunk[handle] = ci
+	cm.chunks[handle] = ci
 
 	//call chunkserver to create chunk
 	var errorInfo string
@@ -258,7 +258,7 @@ func (cm *chunkManager) RemoveChunk(handles []gfs.ChunkHandle, server gfs.Server
 	errList := ""
 	for _, handle := range handles {
 		cm.RLock()
-		ci := cm.chunk[handle]
+		ci := cm.chunks[handle]
 		cm.RUnlock()
 
 		ci.Lock()

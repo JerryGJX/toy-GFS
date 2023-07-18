@@ -142,4 +142,7 @@ const (
 	DeletedFilePrefix = "_delete_"
 
 	LeaseExpireInterval = 3 * time.Second
+
+	ServerCheckInterval = 500 * time.Millisecond
+	CheckPointInterval  = 30 * time.Minute
 )

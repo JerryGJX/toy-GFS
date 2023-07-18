@@ -21,6 +21,7 @@ type Master struct {
 	serverRoot string            // path to metadata storage
 	l          net.Listener
 	shutdown   chan struct{}
+	dead       bool
 
 	nm  *namespaceManager
 	cm  *chunkManager
@@ -29,7 +30,7 @@ type Master struct {
 
 const (
 	MetaDataFileName = "master_meta"
-	filePerm = 0755
+	filePerm         = 0755
 )
 
 type PersistentMetaData struct {
@@ -40,7 +41,7 @@ type PersistentMetaData struct {
 func (m *Master) loadMetaData() error {
 	filePath := path.Join(m.serverRoot, MetaDataFileName)
 	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
-	if err!=nil {
+	if err != nil {
 		return err
 	}
 	defer file.Close()
@@ -48,7 +49,7 @@ func (m *Master) loadMetaData() error {
 	var metadata PersistentMetaData
 
 	err = gob.NewDecoder(file).Decode(&metadata)
-	if err!=nil {
+	if err != nil {
 		return err
 	}
 	m.nm.Deserialize(metadata.SeNamespace)
@@ -56,14 +57,14 @@ func (m *Master) loadMetaData() error {
 	return nil
 }
 
-func (m *Master) storeMetaData() error{
+func (m *Master) storeMetaData() error {
 	filePath := path.Join(m.serverRoot, MetaDataFileName)
 	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
-	if err!=nil {
+	if err != nil {
 		return err
 	}
 	defer file.Close()
-	
+
 	var metadata PersistentMetaData
 
 	metadata.SeNamespace = m.nm.Serialize()
@@ -79,6 +80,49 @@ func (m *Master) initMetaData() {
 	m.csm = newChunkServerManager()
 	m.loadMetaData()
 	return
+}
+
+func (m *Master) serverCheck() error {
+	addr_list := m.csm.DetectDeadServers()
+
+	for _, addr := range addr_list {
+		log.Warning("[master]{serverCheck} remove server %v", addr)
+		handles, err := m.csm.RemoveServer(addr)
+		if err != nil {
+			return err
+		}
+		err = m.cm.RemoveChunk(handles, addr)
+		if err != nil {
+			return err
+		}
+	}
+
+	handles := m.cm.GetReplicaNeededList()
+	if handles != nil {
+		log.Info("[master]{serverCheck} replica needed list: %v", handles)
+		m.cm.Lock()
+		for i := 0; i < len(handles); i++ {
+			ck := m.cm.chunks[handles[i]]
+			if ck.expire.Before(time.Now()) {
+				ck.Lock()
+				err := m.reReplication(handles[i])
+				log.Info("[master]{serverCheck} reReplication %v", handles[i])
+				log.Info("[master]{serverCheck} reReplication ", err)
+				ck.Unlock()
+			}
+		}
+		m.cm.Unlock()
+	}
+	return nil
+}
+
+func (m *Master) reReplication(handle gfs.ChunkHandle) error {
+	//make sure the chunk has been locked outside the function
+	from, to, err := m.csm.ChooseReReplication(handle)
+	if err != nil {
+		return err
+	}
+	
 }
 
 // NewAndServe starts a master and returns the pointer to it.
@@ -124,18 +168,22 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 
 	// Background Task
 	go func() {
-		ticker := time.Tick(gfs.BackgroundInterval)
+		checkTicker := time.Tick(gfs.ServerCheckInterval)
+		storeTicker := time.Tick(gfs.CheckPointInterval)
+
 		for {
+			var err error
 			select {
 			case <-m.shutdown:
 				return
-			default:
+			case <-checkTicker:
+				err = m.serverCheck()
+			case <-storeTicker:
+				err = m.storeMetaData()
 			}
-			<-ticker
 
-			err := m.BackgroundActivity()
 			if err != nil {
-				log.Fatal("Background error ", err)
+				log.Warning("Background error ", err)
 			}
 		}
 	}()
@@ -147,7 +195,16 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 
 // Shutdown shuts down master
 func (m *Master) Shutdown() {
-	close(m.shutdown)
+	if !m.dead {
+		m.dead = true
+		close(m.shutdown)
+		m.l.Close()
+	}
+
+	err := m.storeMetaData()
+	if err != nil {
+		log.Warning("Error when storing metadata ", err)
+	}
 }
 
 // BackgroundActivity does all the background activities:
