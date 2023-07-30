@@ -145,4 +145,7 @@ const (
 
 	ServerCheckInterval = 500 * time.Millisecond
 	CheckPointInterval  = 30 * time.Minute
+
+	//for client
+	LeaseBufferTick = 500 * time.Millisecond
 )
