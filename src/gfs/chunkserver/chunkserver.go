@@ -128,9 +128,9 @@ func (cs *ChunkServer) Shutdown() {
 // RPCPushDataAndForward is called by client.
 // It saves client pushed data to memory buffer and forward to all other replicas.
 // Returns a DataID which represents the index in the memory buffer.
-func (cs *ChunkServer) RPCPushDataAndForward(args gfs.PushDataAndForwardArg, reply *gfs.PushDataAndForwardReply) error {
-	return nil 
-}
+// func (cs *ChunkServer) RPCPushDataAndForward(args gfs.PushDataAndForwardArg, reply *gfs.PushDataAndForwardReply) error {
+// 	return nil 
+// }
 
 // RPCForwardData is called by another replica who sends data to the current memory buffer.
 // TODO: This should be replaced by a chain forwarding.

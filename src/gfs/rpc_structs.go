@@ -6,19 +6,20 @@ import (
 
 //------ ChunkServer
 
-type PushDataAndForwardArg struct {
-	Handle    ChunkHandle
-	Data      []byte
-	ForwardTo []ServerAddress
-}
-type PushDataAndForwardReply struct {
-	DataID    DataBufferID
-	ErrorCode ErrorCode
-}
+// type PushDataAndForwardArg struct {
+// 	Handle    ChunkHandle
+// 	Data      []byte
+// 	ForwardTo []ServerAddress
+// }
+// type PushDataAndForwardReply struct {
+// 	DataID    DataBufferID
+// 	ErrorCode ErrorCode
+// }
 
 type ForwardDataArg struct {
-	DataID DataBufferID
-	Data   []byte
+	DataID    DataBufferID
+	Data      []byte
+	AddrChain []ServerAddress
 }
 type ForwardDataReply struct {
 	ErrorCode ErrorCode
@@ -76,6 +77,12 @@ type ReadChunkReply struct {
 	Length    int
 	ErrorCode ErrorCode
 }
+
+type RenameFileArg struct {
+	OldPath Path
+	NewPath Path
+}
+type RenameFileReply struct {}
 
 type SendCopyArg struct {
 	Handle  ChunkHandle

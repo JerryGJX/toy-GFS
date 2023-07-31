@@ -50,10 +50,16 @@ func newDownloadBuffer(expire, tick time.Duration) *downloadBuffer {
 }
 
 // allocate a new DataID for given handle
-func (buf *downloadBuffer) New(handle gfs.ChunkHandle) gfs.DataBufferID {
+// func (buf *downloadBuffer) NewDataID(handle gfs.ChunkHandle) gfs.DataBufferID {
+// 	now := time.Now()
+// 	timeStamp := now.Nanosecond() + now.Second()*1000 + now.Minute()*60*1000
+// 	return gfs.DataBufferID{Handle: handle, TimeStamp: timeStamp}
+// }
+
+func NewDataID(handle gfs.ChunkHandle) gfs.DataBufferID {//since the timestamp is only related to the handle, we can use the time of client to generate the timestamp, this will allow us to abandon the function RPCPushDataAndForward
 	now := time.Now()
 	timeStamp := now.Nanosecond() + now.Second()*1000 + now.Minute()*60*1000
-	return gfs.DataBufferID{handle, timeStamp}
+	return gfs.DataBufferID{Handle: handle, TimeStamp: timeStamp}
 }
 
 func (buf *downloadBuffer) Set(id gfs.DataBufferID, data []byte) {
