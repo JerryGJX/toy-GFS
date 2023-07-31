@@ -82,6 +82,13 @@ use (
 
 ### 3.1. major structure
 
+#### In Client
+
+design:
+
+1. the retrials will be conducted by the `Read`, `Write`, `Append` ... api, the `ReadChunk` etc. will only try the opration once
+2. Since the artical did not clerify the countermeasure of the case that the data fail to upload to all the replica server, so we decide just let the client directly upload the data to one server and if this process succeeded, we will continue to send the rank list to the primary node
+
 ### 3.2. extra feature
 
 > design and arrangement that are differ from the description in the paper
