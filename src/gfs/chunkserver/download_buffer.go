@@ -1,6 +1,7 @@
 package chunkserver
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -56,7 +57,7 @@ func newDownloadBuffer(expire, tick time.Duration) *downloadBuffer {
 // 	return gfs.DataBufferID{Handle: handle, TimeStamp: timeStamp}
 // }
 
-func NewDataID(handle gfs.ChunkHandle) gfs.DataBufferID {//since the timestamp is only related to the handle, we can use the time of client to generate the timestamp, this will allow us to abandon the function RPCPushDataAndForward
+func NewDataID(handle gfs.ChunkHandle) gfs.DataBufferID { //since the timestamp is only related to the handle, we can use the time of client to generate the timestamp, this will allow us to abandon the function RPCPushDataAndForward
 	now := time.Now()
 	timeStamp := now.Nanosecond() + now.Second()*1000 + now.Minute()*60*1000
 	return gfs.DataBufferID{Handle: handle, TimeStamp: timeStamp}
@@ -77,6 +78,17 @@ func (buf *downloadBuffer) Get(id gfs.DataBufferID) ([]byte, bool) {
 	}
 	item.expire = time.Now().Add(buf.expire) // touch
 	return item.data, ok
+}
+
+func (buf *downloadBuffer) GetAndDelete(id gfs.DataBufferID) ([]byte, error) {
+	buf.Lock()
+	defer buf.Unlock()
+	item, ok := buf.buffer[id]
+	if !ok {
+		return nil, fmt.Errorf("[DownloadBuffer]{GetAndDelete} DataBufferID %v not found", id)
+	}
+	delete(buf.buffer, id)
+	return item.data, nil
 }
 
 func (buf *downloadBuffer) Delete(id gfs.DataBufferID) {
