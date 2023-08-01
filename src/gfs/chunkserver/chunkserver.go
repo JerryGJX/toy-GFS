@@ -181,3 +181,8 @@ func (cs *ChunkServer) RPCApplyCopy(args gfs.ApplyCopyArg, reply *gfs.ApplyCopyR
 func (cs *ChunkServer)RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.CheckVersionReply) error {
 	return nil 
 }
+
+//----------------added by me----------------
+func (cs *ChunkServer) RPCReportSelf(args gfs.ReportSelfArg, reply *gfs.ReportSelfReply) error {
+	return nil 
+}

@@ -25,7 +25,7 @@ type nsTree struct {
 	chunks int64
 }
 
-//for serializing the tree to array and deserializing it back
+// for serializing the tree to array and deserializing it back
 type serialTreeNode struct {
 	isDir    bool
 	children map[string]int
@@ -85,9 +85,10 @@ func (nm *namespaceManager) lockParents(sp *gfs.SplitPath, retSelf bool) (*nsTre
 			if !ok {
 				return ptr, fmt.Errorf("path %s not found", string(sp.SplitPath2Path()))
 			}
-			if i == len(sp.Parts)-1 {
+			if i == len(sp.Parts) - 1 {//the last
 				if retSelf {
-					ptr = c //in order to omit the process of go down in interface
+					ptr = c 
+					//in order to omit the process of go down in interface
 				}
 			} else {
 				ptr = c

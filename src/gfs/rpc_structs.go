@@ -101,7 +101,7 @@ type ApplyCopyReply struct {
 	ErrorCode ErrorCode
 }
 
-//------ Master
+//------ Master ------
 
 type HeartbeatArg struct {
 	Address         ServerAddress // chunkserver address
@@ -179,4 +179,16 @@ type CheckVersionArg struct {
 
 type CheckVersionReply struct {
 	Stale bool
+}
+
+
+//------ Client ------
+
+
+//----- ChunkServer -----
+type ReportSelfArg struct{
+}
+
+type ReportSelfReply struct{
+	Chunks []PersistentChunkInfo
 }

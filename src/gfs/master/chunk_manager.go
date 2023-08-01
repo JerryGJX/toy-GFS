@@ -95,18 +95,18 @@ func newChunkManager() *chunkManager {
 }
 
 // RegisterReplica adds a replica for a chunk
-func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerAddress, isLocked bool) error { // isLock is to show whether the chunk is locked
+func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerAddress, useLock bool) error { // isLock is to show whether the chunk is locked
 	var ci *chunkInfo
 	var ok bool
-	if isLocked {
-		ci, ok = cm.chunks[handle]
-	} else {
+	if useLock {
 		cm.RLock()
 		ci, ok = cm.chunks[handle]
 		cm.RUnlock()
 
 		ci.Lock()
 		defer ci.Unlock()
+	} else {
+		ci, ok = cm.chunks[handle]
 	}
 	if !ok {
 		return fmt.Errorf("[chunk_manager]{RegisterReplica} cannot find chunk %v", handle)
@@ -253,7 +253,7 @@ func (cm *chunkManager) CreateChunk(path gfs.Path, addrs []gfs.ServerAddress) (g
 	}
 }
 
-//RemoveChunk removes chunks from a chunk manager
+// RemoveChunk removes chunks from a chunk manager
 func (cm *chunkManager) RemoveChunk(handles []gfs.ChunkHandle, server gfs.ServerAddress) error {
 	errList := ""
 	for _, handle := range handles {

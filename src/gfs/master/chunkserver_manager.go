@@ -45,6 +45,7 @@ func (csm *chunkServerManager) Heartbeat(addr gfs.ServerAddress) bool {
 		}
 		return true
 	} else {
+		//todo: add garbage collection
 		csi.lastHeartbeat = time.Now()
 		return false
 	}
