@@ -16,7 +16,6 @@ type ChunkVersion int64
 type Checksum int64
 type MutationType int
 
-
 type DataBufferID struct {
 	Handle    ChunkHandle
 	TimeStamp int
@@ -41,7 +40,7 @@ type SplitPath struct {
 type Lease struct {
 	Primary     ServerAddress
 	Expire      time.Time
-	Secondaries []ServerAddress//since each time refresh a lease, the secondaries will be updated, so we can store it in lease
+	Secondaries []ServerAddress //since each time refresh a lease, the secondaries will be updated, so we can store it in lease
 }
 
 type PersistentChunkInfo struct {
@@ -50,9 +49,6 @@ type PersistentChunkInfo struct {
 	Version  ChunkVersion
 	Checksum Checksum
 }
-
-
-
 
 func (sp *SplitPath) SplitPath2Path() Path {
 	ret := ""
@@ -91,11 +87,6 @@ func (p Path) Path2SplitPath() *SplitPath {
 	return &ret
 }
 
-
-
-
-
-
 const (
 	MutationWrite = iota
 	MutationAppend
@@ -125,27 +116,30 @@ func (e Error) Error() string {
 
 // system config
 const (
-	LeaseExpire        = 2 * time.Second //1 * time.Minute
-	HeartbeatInterval  = 100 * time.Millisecond
-	BackgroundInterval = 200 * time.Millisecond //
-	ServerTimeout      = 1 * time.Second        //
+	// chunk
+	LeaseExpireInterval = 3 * time.Second
+	DefaultNumReplicas  = 3
+	MinimumNumReplicas  = 2
+	MaxChunkSize        = 512 << 10 // 512KB DEBUG ONLY 64 << 20
+	MaxAppendSize       = MaxChunkSize / 4
+	DeletedFilePrefix   = "_delete_"
 
-	MaxChunkSize  = 512 << 10 // 512KB DEBUG ONLY 64 << 20
-	MaxAppendSize = MaxChunkSize / 4
+	//master
+	ServerCheckInterval = 500 * time.Millisecond
+	MasterStoreInterval = 30 * time.Hour
+	ServerTimeout       = 1 * time.Second
 
-	DefaultNumReplicas = 3
-	MinimumNumReplicas = 2
-
+	//chunk server
+	HeartbeatInterval    = 100 * time.Millisecond
+	MutationWaitTimeout  = 4 * time.Second
+	ServerStoreInterval  = 40 * time.Hour // 30 * time.Minute
+	GarbageCollectionInt = 30 * time.Hour // 1 * time.Day
 	DownloadBufferExpire = 2 * time.Minute
 	DownloadBufferTick   = 10 * time.Second
 
-	DeletedFilePrefix = "_delete_"
-
-	LeaseExpireInterval = 3 * time.Second
-
-	ServerCheckInterval = 500 * time.Millisecond
-	CheckPointInterval  = 30 * time.Minute
+	CheckPointInterval = 30 * time.Minute
 
 	//for client
+	ClientTimeout   = 2*LeaseExpireInterval + 3*ServerTimeout
 	LeaseBufferTick = 500 * time.Millisecond
 )
