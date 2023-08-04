@@ -247,6 +247,7 @@ func (c *Client) ReadChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []byt
 // WriteChunk writes data to the chunk at specific offset.
 // len(data)+offset should be within chunk size.
 func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []byte) error {
+	log.Infof("[client]{WriteChunk}enter function; handle: %v, offset: %v", handle, offset)
 	if int(offset)+len(data) > gfs.MaxChunkSize {
 		return fmt.Errorf("[client]{WriteChunk} error: data is too long for one chunk")
 	}
@@ -258,7 +259,7 @@ func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []by
 	chain := append(lease.Secondaries, lease.Primary) //randomness will be granted by the master
 
 	var rep gfs.ForwardDataReply
-	err = util.Call(chain[0], "ChunkServer.RPCForwardData", gfs.ForwardDataArg{DataID: dataID, Data: data}, &rep)
+	err = util.Call(chain[0], "ChunkServer.RPCForwardData", gfs.ForwardDataArg{DataID: dataID, Data: data, AddrChain: chain[1:]}, &rep)
 	if err != nil {
 		return err
 	}

@@ -9,6 +9,7 @@
 *.o
 *.a
 *.so
+*.log
 
 # Folders
 _obj

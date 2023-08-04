@@ -125,7 +125,7 @@ const (
 	// chunk
 	LeaseExpire        = 3 * time.Second
 	DefaultNumReplicas = 3
-	MinimumNumReplicas = 1
+	MinimumNumReplicas = 2
 	MaxChunkSize       = 512 << 10 // 512KB DEBUG ONLY 64 << 20
 	MaxAppendSize      = MaxChunkSize / 4
 	DeletedFilePrefix  = "_delete_"

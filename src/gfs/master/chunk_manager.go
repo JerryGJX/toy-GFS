@@ -238,7 +238,7 @@ func (cm *chunkManager) CreateChunk(path gfs.Path, addrs []gfs.ServerAddress) (g
 	var successList []gfs.ServerAddress
 	for _, addr := range addrs {
 		var rpc_reply gfs.CreateChunkReply
-		err := util.Call(addr, "ChunkServer.RPCCreateChunk", handle, &rpc_reply)
+		err := util.Call(addr, "ChunkServer.RPCCreateChunk", gfs.CreateChunkArg{Handle: handle}, &rpc_reply)
 		if err != nil {
 			errorInfo += fmt.Sprintf("%v: %v\n", addr, err)
 		} else {

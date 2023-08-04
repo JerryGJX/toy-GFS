@@ -224,6 +224,7 @@ func (cs *ChunkServer) Shutdown() {
 
 // new version: RPCForwardData is called by either another replica or a client who sends data to the current memory buffer.
 func (cs *ChunkServer) RPCForwardData(args gfs.ForwardDataArg, reply *gfs.ForwardDataReply) error {
+	log.Info("[chunkserver]{RPCForwardData} server: ", cs.address, " receive dataID: ", args.DataID)
 	if _, ok := cs.dl.Get(args.DataID); ok {
 		return fmt.Errorf("[chunkserver]{RPCForwardData} error: dataID %v already exist", args.DataID)
 	}
@@ -252,6 +253,7 @@ func (cs *ChunkServer) RPCCreateChunk(args gfs.CreateChunkArg, reply *gfs.Create
 	}
 	filename := cs.getChunkFilePath(args.Handle)
 	_, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, ChunkFilePerm)
+
 	return err
 }
 
@@ -279,6 +281,7 @@ func (cs *ChunkServer) RPCReadChunk(args gfs.ReadChunkArg, reply *gfs.ReadChunkR
 // RPCWriteChunk is called by client
 // applies chunk write to itself (primary) and asks secondaries to do the same.
 func (cs *ChunkServer) RPCWriteChunk(args gfs.WriteChunkArg, reply *gfs.WriteChunkReply) error {
+	log.Info("[chunkserver]{RPCWriteChunk} server: ", cs.address, " write chunk: ", args.DataID, " start")
 	data, err := cs.dl.GetAndDelete(args.DataID)
 	if err != nil {
 		return err
@@ -523,6 +526,9 @@ func (cs *ChunkServer) writeChunk(handle gfs.ChunkHandle, data []byte, offset gf
 	defer file.Close()
 
 	_, err = file.WriteAt(data, int64(offset))
+	if err != nil {
+		log.Warningf("[chunkserver]{writeChunk} error in write: ", err)
+	}
 
 	return err
 }
