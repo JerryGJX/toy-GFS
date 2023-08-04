@@ -87,6 +87,12 @@ func (p Path) Path2SplitPath() *SplitPath {
 	return &ret
 }
 
+func PathFormalizer(path Path, isDir bool) Path {
+	sp := path.Path2SplitPath()
+	sp.IsDir = isDir
+	return sp.SplitPath2Path()
+}
+
 const (
 	MutationWrite = iota
 	MutationAppend
@@ -117,12 +123,12 @@ func (e Error) Error() string {
 // system config
 const (
 	// chunk
-	LeaseExpireInterval = 3 * time.Second
-	DefaultNumReplicas  = 3
-	MinimumNumReplicas  = 2
-	MaxChunkSize        = 512 << 10 // 512KB DEBUG ONLY 64 << 20
-	MaxAppendSize       = MaxChunkSize / 4
-	DeletedFilePrefix   = "_delete_"
+	LeaseExpire        = 3 * time.Second
+	DefaultNumReplicas = 3
+	MinimumNumReplicas = 1
+	MaxChunkSize       = 512 << 10 // 512KB DEBUG ONLY 64 << 20
+	MaxAppendSize      = MaxChunkSize / 4
+	DeletedFilePrefix  = "_delete_"
 
 	//master
 	ServerCheckInterval = 500 * time.Millisecond
@@ -140,6 +146,6 @@ const (
 	CheckPointInterval = 30 * time.Minute
 
 	//for client
-	ClientTimeout   = 2*LeaseExpireInterval + 3*ServerTimeout
+	ClientTimeout   = 2*LeaseExpire + 3*ServerTimeout
 	LeaseBufferTick = 500 * time.Millisecond
 )

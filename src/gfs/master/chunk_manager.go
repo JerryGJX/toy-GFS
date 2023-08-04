@@ -185,7 +185,7 @@ func (cm *chunkManager) GetLeaseHolder(handle gfs.ChunkHandle) (*gfs.Lease, erro
 		}
 		ci.location = freshList
 		ci.primary = freshList[0]
-		ci.expire = time.Now().Add(gfs.LeaseExpireInterval)
+		ci.expire = time.Now().Add(gfs.LeaseExpire)
 	}
 	ret.Primary = ci.primary
 	ret.Expire = ci.expire
@@ -210,7 +210,7 @@ func (cm *chunkManager) ExtendLease(handle gfs.ChunkHandle, primary gfs.ServerAd
 		return fmt.Errorf("[chunk_manager]{ExtendLease} %v is not primary of chunk %v", primary, handle)
 	}
 	ci.primary = primary
-	ci.expire = present.Add(gfs.LeaseExpireInterval)
+	ci.expire = present.Add(gfs.LeaseExpire)
 	return nil
 }
 

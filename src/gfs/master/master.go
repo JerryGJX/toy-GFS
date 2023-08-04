@@ -42,6 +42,7 @@ type PersistentMetaData struct {
 
 func (m *Master) loadMetaData() error {
 	filePath := path.Join(m.serverRoot, MetaDataFileName)
+	log.Info("[master]{loadMetaData}enter function: load metadata from ", filePath) 
 	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
 	if err != nil {
 		return err
@@ -56,13 +57,16 @@ func (m *Master) loadMetaData() error {
 	}
 	m.nm.Deserialize(metadata.SeNamespace)
 	m.cm.Deserialize(metadata.SeChunkInfo)
+	log.Info("[master]{loadMetaData} namespace: ", metadata.SeNamespace)
 	return nil
 }
 
 func (m *Master) storeMetaData() error {
 	filePath := path.Join(m.serverRoot, MetaDataFileName)
+	log.Info("[master]{storeMetaData}enter function: store metadata to ", filePath)
 	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
 	if err != nil {
+		log.Warning("[master]{storeMetaData} error: ", err)
 		return err
 	}
 	defer file.Close()
@@ -70,9 +74,16 @@ func (m *Master) storeMetaData() error {
 	var metadata PersistentMetaData
 
 	metadata.SeNamespace = m.nm.Serialize()
+
+	log.Info("[master]{storeMetaData} namespace: ", metadata.SeNamespace)
 	metadata.SeChunkInfo = m.cm.Serialize()
 
+	log.Info("[master]{storeMetaData} chunkinfo: ", metadata.SeChunkInfo)
+
 	err = gob.NewEncoder(file).Encode(metadata)
+	if err != nil {
+		log.Warning("[master]{storeMetaData} error: ", err)
+	}
 	return err
 }
 
@@ -80,6 +91,7 @@ func (m *Master) initMetaData() {
 	m.nm = newNamespaceManager()
 	m.cm = newChunkManager()
 	m.csm = newChunkServerManager()
+	log.Info("[master]{initMetaData} init namespace and chunkmanager")
 	m.loadMetaData()
 }
 
@@ -178,7 +190,10 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 					conn.Close()
 				}()
 			} else {
-				log.Fatal("[master]{NewAndServer} master accept error:", err)
+				if !m.dead {
+					log.Fatal("[master]{NewAndServe} master accept error:", err)
+				}
+				// log.Fatal("[master]{NewAndServer} master accept error:", err)
 				// log.Exit(1)
 			}
 		}
@@ -220,9 +235,10 @@ func (m *Master) Shutdown() {
 		m.l.Close()
 	}
 
+	log.Info("[master]{Shutdown} Storing metadata")
 	err := m.storeMetaData()
 	if err != nil {
-		log.Warning("Error when storing metadata ", err)
+		log.Warning("[master]{Shutdown} Error when storing metadata ", err)
 	}
 }
 
@@ -236,6 +252,7 @@ func (m *Master) BackgroundActivity() error {
 // RPCHeartbeat is called by chunkserver to let the master know that a chunkserver is alive.
 // Lease extension request is included.
 func (m *Master) RPCHeartbeat(args gfs.HeartbeatArg, reply *gfs.HeartbeatReply) error {
+	log.Info("[master]{RPCHeartbeat} enter")
 	isNew := m.csm.Heartbeat(args.Address)
 
 	for _, handle := range args.LeaseExtensions {
@@ -291,18 +308,21 @@ func (m *Master) RPCGetReplicas(args gfs.GetReplicasArg, reply *gfs.GetReplicasR
 
 // RPCCreateFile is called by client to create a new file
 func (m *Master) RPCCreateFile(args gfs.CreateFileArg, replay *gfs.CreateFileReply) error {
+	args.Path = gfs.PathFormalizer(args.Path, false)
 	err := m.nm.Create(args.Path)
 	return err
 }
 
 // RPCMkdir is called by client to make a new directory
 func (m *Master) RPCMkdir(args gfs.MkdirArg, reply *gfs.MkdirReply) error {
+	args.Path = gfs.PathFormalizer(args.Path, true)
 	err := m.nm.Mkdir(args.Path)
 	return err
 }
 
 // RPCGetFileInfo is called by client to get file information
 func (m *Master) RPCGetFileInfo(args gfs.GetFileInfoArg, reply *gfs.GetFileInfoReply) error {
+	args.Path = gfs.PathFormalizer(args.Path, false)
 	sp := args.Path.Path2SplitPath()
 	filename := sp.Parts[len(sp.Parts)-1]
 	cwd, err := m.nm.lockParents(sp, false)
@@ -326,6 +346,7 @@ func (m *Master) RPCGetFileInfo(args gfs.GetFileInfoArg, reply *gfs.GetFileInfoR
 // RPCGetChunkHandle returns the chunk handle of (path, index).
 // If the requested index is bigger than the number of chunks of this path by exactly one, create one.
 func (m *Master) RPCGetChunkHandle(args gfs.GetChunkHandleArg, reply *gfs.GetChunkHandleReply) error {
+	args.Path = gfs.PathFormalizer(args.Path, false)
 	sp := args.Path.Path2SplitPath()
 	filename := sp.Parts[len(sp.Parts)-1]
 	cwd, err := m.nm.lockParents(sp, false)
@@ -342,7 +363,9 @@ func (m *Master) RPCGetChunkHandle(args gfs.GetChunkHandleArg, reply *gfs.GetChu
 	defer file.Unlock()
 
 	if int(args.Index) == int(file.chunks) { //if the index is the next chunk, then create a new chunk
+		log.Info("[master]{RPCGetChunkHandle} create new chunk for file: ", args.Path)
 		file.chunks++
+		log.Info("[master]{RPCGetChunkHandle} current server list: ", m.csm.servers)
 		addrList, err := m.csm.ChooseServers(gfs.MinimumNumReplicas)
 		if err != nil {
 			return err
@@ -365,7 +388,9 @@ func (m *Master) RPCGetChunkHandle(args gfs.GetChunkHandleArg, reply *gfs.GetChu
 }
 
 func (m *Master) RPCList(args gfs.ListArg, reply *gfs.ListReply) error {
+	args.Path = gfs.PathFormalizer(args.Path, true)
 	var err error
 	reply.Files, err = m.nm.List(args.Path)
+	log.Info("[master]{RPCList} dir path: ", args.Path, "; files: ", reply.Files)
 	return err
 }

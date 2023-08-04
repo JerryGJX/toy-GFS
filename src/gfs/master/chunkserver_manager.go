@@ -33,12 +33,13 @@ type chunkServerInfo struct {
 
 // Hearbeat marks the chunkserver alive for now.
 func (csm *chunkServerManager) Heartbeat(addr gfs.ServerAddress) bool {
+	log.Info("[chunkserver manager]{Heartbeat} enter")
 	csm.Lock()
 	defer csm.Unlock()
 
 	csi, ok := csm.servers[addr]
 	if !ok {
-		log.Info("new chunkserver: ", addr)
+		log.Info("[chunkserver manager]{HeartBeat} new chunkserver: ", addr)
 		csm.servers[addr] = &chunkServerInfo{
 			lastHeartbeat: time.Now(),
 			chunks:        make(map[gfs.ChunkHandle]bool),
@@ -92,7 +93,7 @@ func (csm *chunkServerManager) ChooseServers(num int) ([]gfs.ServerAddress, erro
 	defer csm.RUnlock()
 
 	if len(csm.servers) < num {
-		return nil, fmt.Errorf("[chunkserver_manager]{ChooseServers} failed: no enough chunkservers")
+		return nil, fmt.Errorf("[chunkserver_manager]{ChooseServers} failed: no enough chunkservers; %d < %d", len(csm.servers), num)
 	}
 
 	var all, ret []gfs.ServerAddress

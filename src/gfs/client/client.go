@@ -28,6 +28,7 @@ func NewClient(master gfs.ServerAddress) *Client {
 
 // Create creates a new file on the specific path on GFS.
 func (c *Client) Create(path gfs.Path) error {
+	path = gfs.PathFormalizer(path, false)
 	var rep gfs.CreateFileReply
 	err := util.Call(c.master, "Master.RPCCreateFile", gfs.CreateFileArg{Path: path}, &rep)
 	if err != nil {
@@ -38,6 +39,7 @@ func (c *Client) Create(path gfs.Path) error {
 
 // Mkdir creates a new directory on GFS.
 func (c *Client) Mkdir(path gfs.Path) error {
+	path = gfs.PathFormalizer(path, true)
 	var rep gfs.MkdirReply
 	err := util.Call(c.master, "Master.RPCMkdir", gfs.MkdirArg{Path: path}, &rep)
 	if err != nil {
@@ -48,6 +50,7 @@ func (c *Client) Mkdir(path gfs.Path) error {
 
 // List lists everything in specific directory on GFS.
 func (c *Client) List(path gfs.Path) ([]gfs.PathInfo, error) {
+	path = gfs.PathFormalizer(path, true)
 	var rep gfs.ListReply
 	err := util.Call(c.master, "Master.RPCList", gfs.ListArg{Path: path}, &rep)
 	if err != nil {
@@ -60,6 +63,7 @@ func (c *Client) List(path gfs.Path) ([]gfs.PathInfo, error) {
 // It reads up to len(data) bytes form the File.
 // It return the number of bytes, and an error if any.
 func (c *Client) Read(path gfs.Path, offset gfs.Offset, data []byte) (int, error) {
+	path = gfs.PathFormalizer(path, false)
 	var info gfs.GetFileInfoReply
 	var err error
 	err = util.Call(c.master, "Master.RPCGetFileInfo", gfs.GetFileInfoArg{Path: path}, &info)
@@ -107,6 +111,7 @@ func (c *Client) Read(path gfs.Path, offset gfs.Offset, data []byte) (int, error
 
 // Write writes data to the file at specific offset.
 func (c *Client) Write(path gfs.Path, offset gfs.Offset, data []byte) error {
+	path = gfs.PathFormalizer(path, false)
 	var rep gfs.GetFileInfoReply
 	err := util.Call(c.master, "Master.RPCGetFileInfo", gfs.GetFileInfoArg{Path: path}, &rep)
 	if err != nil {
@@ -153,6 +158,7 @@ func (c *Client) Write(path gfs.Path, offset gfs.Offset, data []byte) error {
 
 // Append appends data to the file. Offset of the beginning of appended data is returned.
 func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
+	path = gfs.PathFormalizer(path, false)
 	var err error
 	if len(data) > gfs.MaxChunkSize {
 		return 0, fmt.Errorf("[client]{Append} error: data is too long")
@@ -200,6 +206,7 @@ func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
 // GetChunkHandle returns the chunk handle of (path, index).
 // If the chunk doesn't exist, master will create one.
 func (c *Client) GetChunkHandle(path gfs.Path, index gfs.ChunkIndex) (gfs.ChunkHandle, error) {
+	path = gfs.PathFormalizer(path, false)
 	var rep gfs.GetChunkHandleReply
 	err := util.Call(c.master, "Master.RPCGetChunkHandle", gfs.GetChunkHandleArg{Path: path, Index: index}, &rep)
 	if err != nil {
@@ -299,6 +306,7 @@ func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, e
 
 // -------------------add feature-------------------
 func (c *Client) Delete(path gfs.Path) error {
+	path = gfs.PathFormalizer(path, false)
 	var rep gfs.DeleteFileReply
 	err := util.Call(c.master, "Master.RPCDeleteFile", gfs.DeleteFileArg{Path: path}, &rep)
 	if err != nil {
@@ -308,6 +316,7 @@ func (c *Client) Delete(path gfs.Path) error {
 }
 
 func (c *Client) Rename(path gfs.Path, newPath gfs.Path) error {
+	path = gfs.PathFormalizer(path, false)
 	var rep gfs.RenameFileReply
 	err := util.Call(c.master, "Master.RPCRenameFile", gfs.RenameFileArg{OldPath: path, NewPath: newPath}, &rep)
 	if err != nil {
@@ -315,3 +324,4 @@ func (c *Client) Rename(path gfs.Path, newPath gfs.Path) error {
 	}
 	return nil
 }
+

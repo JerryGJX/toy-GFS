@@ -11,7 +11,7 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io"
-	"io/ioutil"
+	// "io/ioutil"
 	//"math/rand"
 	"os"
 	"path"
@@ -74,6 +74,12 @@ func TestMkdirDeleteList(t *testing.T) {
 	}
 
 	err = m.RPCMkdir(gfs.MkdirArg{"/dir1"}, &gfs.MkdirReply{})
+	
+	//debug
+	var l2 gfs.ListReply
+	m.RPCList(gfs.ListArg{"/"}, &l2)
+	t.Log("{TestMkdirDeleteList} files in root path: ", l2.Files)
+	
 	if err == nil {
 		t.Error("the same dirctory has been created twice")
 	}
@@ -86,6 +92,7 @@ func TestMkdirDeleteList(t *testing.T) {
 
 	var l gfs.ListReply
 	ch <- m.RPCList(gfs.ListArg{"/"}, &l)
+
 	for _, v := range l.Files {
 		delete(todelete, v.Name)
 	}
@@ -108,6 +115,11 @@ func TestMkdirDeleteList(t *testing.T) {
 
 func TestRPCGetChunkHandle(t *testing.T) {
 	var r1, r2 gfs.GetChunkHandleReply
+
+	// var l gfs.ListReply
+	// m.RPCList(gfs.ListArg{"/"}, &l)
+	// t.Log("{TestRPCGetChunkHandle} files in root path: ", l.Files)
+
 	path := gfs.Path("/test1.txt")
 	err := m.RPCGetChunkHandle(gfs.GetChunkHandleArg{path, 0}, &r1)
 	if err != nil {
@@ -779,7 +791,7 @@ func TestDiskError(t *testing.T) {
 func TestMain(tm *testing.M) {
 	// create temporary directory
 	var err error
-	root, err = ioutil.TempDir("", "gfs-")
+	root, err = os.MkdirTemp("", "gfs-")
 	if err != nil {
 		log.Fatal("cannot create temporary directory: ", err)
 	}

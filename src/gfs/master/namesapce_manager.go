@@ -16,6 +16,8 @@ type namespaceManager struct {
 type nsTree struct {
 	sync.RWMutex
 
+	name string
+
 	// if it is a directory
 	isDir    bool
 	children map[string]*nsTree
@@ -28,12 +30,15 @@ type nsTree struct {
 // for serializing the tree to array and deserializing it back
 type serialTreeNode struct {
 	isDir    bool
+
+	name string
+
 	children map[string]int
 	Chunks   int64
 }
 
 func (nm *namespaceManager) tree2array(array *[]serialTreeNode, node *nsTree) int {
-	n := serialTreeNode{isDir: node.isDir, Chunks: node.chunks}
+	n := serialTreeNode{isDir: node.isDir, Chunks: node.chunks, name: node.name}
 	if node.isDir {
 		n.children = make(map[string]int)
 		for k, v := range node.children {
@@ -50,6 +55,7 @@ func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTre
 	n := &nsTree{
 		isDir:  array[index].isDir,
 		chunks: array[index].Chunks,
+		name:   array[index].name,
 	}
 	if array[index].isDir {
 		n.children = make(map[string]*nsTree)
@@ -81,13 +87,14 @@ func (nm *namespaceManager) lockParents(sp *gfs.SplitPath, retSelf bool) (*nsTre
 	if len(sp.Parts) > 0 {
 		for i, part := range sp.Parts[:len(sp.Parts)] {
 			ptr.RLock()
+			log.Info("[namespace_manager]{lockParents} lock ", ptr.name, ". and all its children are ", ptr.children, ".")
 			c, ok := ptr.children[part]
 			if !ok {
-				return ptr, fmt.Errorf("path %s not found", string(sp.SplitPath2Path()))
+				return ptr, fmt.Errorf("[namespaceManager]{lockParents} path %s not found", string(sp.SplitPath2Path()))
 			}
-			if i == len(sp.Parts) - 1 {//the last
+			if i == len(sp.Parts)-1 { //the last
 				if retSelf {
-					ptr = c 
+					ptr = c
 					//in order to omit the process of go down in interface
 				}
 			} else {
@@ -118,7 +125,7 @@ func (nm *namespaceManager) unlockParents(sp *gfs.SplitPath) {
 func newNamespaceManager() *namespaceManager {
 	nm := &namespaceManager{
 		root: &nsTree{isDir: true,
-			children: make(map[string]*nsTree)},
+			children: make(map[string]*nsTree), name: "/"},
 	}
 	log.Info("#################### new namespace manager ####################")
 	return nm
@@ -147,7 +154,7 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 		return fmt.Errorf("[namespace_manager]{Create} error: %s already exists", p)
 	}
 
-	ptr.children[filename] = new(nsTree)
+	ptr.children[filename] = &nsTree{isDir: false, length: 0, chunks: 0, name: filename}
 	return nil
 }
 
@@ -161,7 +168,7 @@ func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 	if err != nil {
 		return err
 	}
-	filename := sp.Parts[len(sp.Parts)-1]
+	dirname := sp.Parts[len(sp.Parts)-1]
 	ptr, err := nm.lockParents(parent_sp, true)
 	defer nm.unlockParents(parent_sp)
 	if err != nil {
@@ -170,11 +177,11 @@ func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 	ptr.Lock()
 	defer ptr.Unlock()
 
-	if _, ok := ptr.children[filename]; ok {
+	if _, ok := ptr.children[dirname]; ok {
 		return fmt.Errorf("[namespace_manager]{Mkdir} error: %s already exists", p)
 	}
 
-	ptr.children[filename] = &nsTree{isDir: true, children: make(map[string]*nsTree)}
+	ptr.children[dirname] = &nsTree{isDir: true, children: make(map[string]*nsTree), name: dirname}
 	return nil
 }
 
@@ -210,6 +217,34 @@ func (nm *namespaceManager) Rename(oldPath gfs.Path, newPath gfs.Path) error {
 }
 
 func (nm *namespaceManager) List(p gfs.Path) ([]gfs.PathInfo, error) {
-	log.Fatal("[namespace_manager]{List} not implemented")
-	return nil, nil
+	log.Info("[namespace_manager]{List} enter")
+	sp := p.Path2SplitPath()
+	if !sp.IsDir {
+		return nil, fmt.Errorf("[namespace_manager]{list} path: ", p, " not a directory")
+	}
+	var dir *nsTree
+	if p == gfs.Path("/") {
+		dir = nm.root
+	} else {
+		cwd, err := nm.lockParents(sp, true)
+		defer nm.unlockParents(sp)
+		if err != nil {
+			return nil, err
+		}
+		dir = cwd
+	}
+	dir.RLock()
+	defer dir.RUnlock()
+
+	ls := make([]gfs.PathInfo, 0, len(dir.children))
+	for name, val := range dir.children {
+		item := gfs.PathInfo{
+			Name:   name,
+			IsDir:  val.isDir,
+			Length: val.length,
+			Chunks: val.chunks,
+		}
+		ls = append(ls, item)
+	}
+	return ls, nil
 }

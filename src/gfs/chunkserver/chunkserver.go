@@ -201,7 +201,7 @@ func (cs *ChunkServer) heartbeat() error {
 		Address:         cs.address,
 		LeaseExtensions: handleList,
 	}
-	err := util.Call(cs.master, "MasterServer.RPCHeartbeat", args, &gfs.HeartbeatReply{})
+	err := util.Call(cs.master, "Master.RPCHeartbeat", args, &gfs.HeartbeatReply{})
 	return err
 }
 
