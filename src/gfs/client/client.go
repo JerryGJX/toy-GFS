@@ -28,6 +28,7 @@ func NewClient(master gfs.ServerAddress) *Client {
 
 // Create creates a new file on the specific path on GFS.
 func (c *Client) Create(path gfs.Path) error {
+	// log.Info("[client]{Create} enter function, path: ", path)
 	path = gfs.PathFormalizer(path, false)
 	var rep gfs.CreateFileReply
 	err := util.Call(c.master, "Master.RPCCreateFile", gfs.CreateFileArg{Path: path}, &rep)
@@ -158,16 +159,21 @@ func (c *Client) Write(path gfs.Path, offset gfs.Offset, data []byte) error {
 
 // Append appends data to the file. Offset of the beginning of appended data is returned.
 func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
+	log.Info("[client]{Append} enter function, path: ", path)
 	path = gfs.PathFormalizer(path, false)
 	var err error
 	if len(data) > gfs.MaxChunkSize {
 		return 0, fmt.Errorf("[client]{Append} error: data is too long")
 	}
 	var rep gfs.GetFileInfoReply
+
+
+	log.Info("[client]{Append} try to get file info")
 	err = util.Call(c.master, "Master.RPCGetFileInfo", gfs.GetFileInfoArg{Path: path}, &rep)
 	if err != nil {
 		return 0, err
 	}
+
 
 	startIndex := gfs.ChunkIndex(rep.Chunks - 1)
 	if startIndex < 0 {
@@ -176,13 +182,17 @@ func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
 
 	var offsetInChunk gfs.Offset
 	for {
+		// log.Info("[client]{Append} try to get chunk handle")
 		handle, err := c.GetChunkHandle(path, startIndex)
+		// log.Info("[client]{Append} get chunk handle: ", handle)
 		if err != nil {
 			return 0, err
 		}
 
 		for {
+			// log.Info("[client]{Append} try to append chunk")
 			offsetInChunk, err = c.AppendChunk(handle, data)
+			// log.Info("[client]{Append} append chunk with offset: ", offsetInChunk)
 			if err == nil || err.(gfs.Error).Code == gfs.AppendExceedChunkSize {
 				break
 			}
@@ -192,7 +202,7 @@ func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
 			break
 		}
 		startIndex++
-		log.Info("[client]{Append} a Chunk is appended, try next")
+		// log.Info("[client]{Append} a Chunk is appended, try next")
 	}
 
 	if err != nil {
@@ -206,6 +216,7 @@ func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
 // GetChunkHandle returns the chunk handle of (path, index).
 // If the chunk doesn't exist, master will create one.
 func (c *Client) GetChunkHandle(path gfs.Path, index gfs.ChunkIndex) (gfs.ChunkHandle, error) {
+	// log.Info("[client]{GetChunkHandle} enter function, path: ", path, "; index: ", index)
 	path = gfs.PathFormalizer(path, false)
 	var rep gfs.GetChunkHandleReply
 	err := util.Call(c.master, "Master.RPCGetChunkHandle", gfs.GetChunkHandleArg{Path: path, Index: index}, &rep)
@@ -247,7 +258,7 @@ func (c *Client) ReadChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []byt
 // WriteChunk writes data to the chunk at specific offset.
 // len(data)+offset should be within chunk size.
 func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []byte) error {
-	log.Infof("[client]{WriteChunk}enter function; handle: %v, offset: %v", handle, offset)
+	// log.Infof("[client]{WriteChunk}enter function; handle: %v, offset: %v", handle, offset)
 	if int(offset)+len(data) > gfs.MaxChunkSize {
 		return fmt.Errorf("[client]{WriteChunk} error: data is too long for one chunk")
 	}
@@ -266,7 +277,7 @@ func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []by
 	var rep2 gfs.WriteChunkReply
 	err = util.Call(lease.Primary, "ChunkServer.RPCWriteChunk", gfs.WriteChunkArg{DataID: dataID, Offset: offset, Secondaries: lease.Secondaries}, &rep2)
 	if err != nil {
-		log.Error("[client]{WriteChunk} RPCWriteChunk with error code: ", rep2.ErrorCode)
+		// log.Error("[client]{WriteChunk} RPCWriteChunk with error code: ", rep2.ErrorCode)
 		return err
 	} else {
 		return nil
@@ -277,6 +288,7 @@ func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []by
 // Chunk offset of the start of data will be returned if success.
 // len(data) should be within max append size.
 func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, error) {
+	log.Infof("[client]{AppendChunk} enter function, handle: %v; data: %s", handle, data)
 	if len(data) > gfs.MaxAppendSize {
 		return 0, gfs.Error{Code: gfs.UnknownError, Err: fmt.Sprintf("len(data) = %v > max append size %v", len(data), gfs.MaxAppendSize)}
 	}
@@ -287,6 +299,7 @@ func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, e
 	}
 	dataID := chunkserver.NewDataID(handle)
 	chain := append(lease.Secondaries, lease.Primary)
+	log.Info("[client]{AppendChunk} chain: ", chain)
 
 	var rep gfs.ForwardDataReply
 	err = util.Call(chain[0], "ChunkServer.RPCForwardData", gfs.ForwardDataArg{DataID: dataID, Data: data, AddrChain: chain[1:]}, &rep)
@@ -325,4 +338,3 @@ func (c *Client) Rename(path gfs.Path, newPath gfs.Path) error {
 	}
 	return nil
 }
-

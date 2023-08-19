@@ -8,7 +8,8 @@ import (
 	"net/rpc"
 	"os"
 	"path"
-	"sync"
+	// "sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -73,7 +74,7 @@ func (cs *ChunkServer) loadMetaData() error {
 		return err
 	}
 
-	log.Infof("[chunkserver]{loadMetaData} chunkserver: ", cs.address, " load metadata len: ", len(pcis))
+	// log.Infof("[chunkserver]{loadMetaData} chunkserver: ", cs.address, " load metadata len: ", len(pcis))
 
 	for _, pci := range pcis {
 		cs.chunk[pci.Handle] = &chunkInfo{
@@ -104,7 +105,7 @@ func (cs *ChunkServer) storeMetaData() error {
 		})
 	}
 
-	log.Info("[chunkserver]{storeMetaData} server: ", cs.address, " store metadata of len: ", len(pcis))
+	// log.Info("[chunkserver]{storeMetaData} server: ", cs.address, " store metadata of len: ", len(pcis))
 	err = gob.NewEncoder(file).Encode(pcis)
 	return err
 }
@@ -187,13 +188,15 @@ func NewAndServe(addr, masterAddr gfs.ServerAddress, serverRoot string) *ChunkSe
 		}
 	}()
 
-	log.Infof("[chunkserver]{NewAndServer} ChunkServer is now running. addr = %v, root path = %v, master addr = %v", addr, serverRoot, masterAddr)
+	// log.Infof("[chunkserver]{NewAndServer} ChunkServer is now running. addr = %v, root path = %v, master addr = %v", addr, serverRoot, masterAddr)
 	return cs
 }
 
 func (cs *ChunkServer) heartbeat() error {
 	rawList := cs.pendingLeaseExtensions.GetAllAndClear()
-	handleList := make([]gfs.ChunkHandle, 0, len(rawList))
+	handleList := make([]gfs.ChunkHandle, len(rawList))
+
+	// log.Info("[chunkserver]{heartbeat} server: ", cs.address, " heartbeat len: ", len(rawList))
 	for index, value := range rawList {
 		handleList[index] = value.(gfs.ChunkHandle)
 	}
@@ -224,7 +227,7 @@ func (cs *ChunkServer) Shutdown() {
 
 // new version: RPCForwardData is called by either another replica or a client who sends data to the current memory buffer.
 func (cs *ChunkServer) RPCForwardData(args gfs.ForwardDataArg, reply *gfs.ForwardDataReply) error {
-	log.Info("[chunkserver]{RPCForwardData} server: ", cs.address, " receive dataID: ", args.DataID)
+	log.Infof("[chunkserver]{RPCForwardData} server: %v; receive dataID: %v",  cs.address, args.DataID)
 	if _, ok := cs.dl.Get(args.DataID); ok {
 		return fmt.Errorf("[chunkserver]{RPCForwardData} error: dataID %v already exist", args.DataID)
 	}
@@ -281,7 +284,7 @@ func (cs *ChunkServer) RPCReadChunk(args gfs.ReadChunkArg, reply *gfs.ReadChunkR
 // RPCWriteChunk is called by client
 // applies chunk write to itself (primary) and asks secondaries to do the same.
 func (cs *ChunkServer) RPCWriteChunk(args gfs.WriteChunkArg, reply *gfs.WriteChunkReply) error {
-	log.Info("[chunkserver]{RPCWriteChunk} server: ", cs.address, " write chunk: ", args.DataID, " start")
+	// log.Info("[chunkserver]{RPCWriteChunk} server: ", cs.address, " write chunk: ", args.DataID, " start")
 	data, err := cs.dl.GetAndDelete(args.DataID)
 	if err != nil {
 		return err
@@ -429,7 +432,7 @@ func (cs *ChunkServer) RPCSendCopy(args gfs.SendCopyArg, reply *gfs.SendCopyRepl
 		return err
 	}
 
-	err = util.Call(args.Address, "ChunkServer.RPCApplyCopy", gfs.ApplyCopyArg{Handle: handle, Data: data}, &gfs.ApplyCopyReply{})
+	err = util.Call(args.Address, "ChunkServer.RPCApplyCopy", gfs.ApplyCopyArg{Handle: handle, Data: data, Version: ci.version}, &gfs.ApplyCopyReply{})
 	return err
 }
 
@@ -453,6 +456,7 @@ func (cs *ChunkServer) RPCApplyCopy(args gfs.ApplyCopyArg, reply *gfs.ApplyCopyR
 
 // RPCCheckVersion is called by master to check version and detect stale chunk
 func (cs *ChunkServer) RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.CheckVersionReply) error {
+	log.Info("[chunkserver]{RPCCheckVersion} check version for chunk: ", args.Handle)
 	cs.RLock()
 	ci, ok := cs.chunk[args.Handle]
 	cs.RUnlock()
@@ -461,9 +465,12 @@ func (cs *ChunkServer) RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.Chec
 	}
 	ci.Lock()
 	defer ci.Unlock()
+	
+	log.Info("[chunkserver]{RPCCheckVersion} local version: ", ci.version, " master version: ", args.Version)
 
 	if ci.version+gfs.ChunkVersion(1) == args.Version {
 		ci.version++
+		log.Info("[chunkserver]{RPCCheckVersion} chunk ", args.Handle, " version updated to ", ci.version)
 		reply.Stale = false
 	} else {
 		log.Warningf("[chunkserver]{RPCCheckVersion} chunk %v version mismatch, local version: %v, master version: %v", args.Handle, ci.version, args.Version)
@@ -478,7 +485,7 @@ func (cs *ChunkServer) RPCReportSelf(args gfs.ReportSelfArg, reply *gfs.ReportSe
 	cs.RLock()
 	defer cs.RUnlock()
 
-	log.Info("[ChunkServer]{RPCReportSelf} server: ", cs.address, " report self")
+	// log.Info("[ChunkServer]{RPCReportSelf} server: ", cs.address, " report self")
 	var ret []gfs.PersistentChunkInfo
 	for handle, ci := range cs.chunk {
 		ret = append(ret, gfs.PersistentChunkInfo{
@@ -489,7 +496,7 @@ func (cs *ChunkServer) RPCReportSelf(args gfs.ReportSelfArg, reply *gfs.ReportSe
 		})
 	}
 	reply.Chunks = ret
-	log.Info("[chunkserver]{RPCReportSelf}", cs.address, ": self report end")
+	// log.Info("[chunkserver]{RPCReportSelf}", cs.address, ": self report end")
 	return nil
 }
 

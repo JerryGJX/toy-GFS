@@ -6,8 +6,10 @@ import (
 	"gfs/util"
 
 	// "gfs/util"
-	"sync"
+	// "sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -57,6 +59,7 @@ func (cm *chunkManager) Serialize() []serialChunkInfo {
 				Version:  cm.chunks[handle].version,
 				Checksum: 0, //todo
 			})
+			// log.Info("[chunk_manager]{Serialize} chunk handle: ", handle, " version: ", cm.chunks[handle].version)
 		}
 		ret = append(ret, serialChunkInfo{Path: path, Info: pcis})
 	}
@@ -69,7 +72,7 @@ func (cm *chunkManager) Deserialize(scis []serialChunkInfo) error {
 
 	present := time.Now()
 	for _, sci := range scis {
-		log.Info("[chunk_manager]{Deserialize} master restores file: ", sci.Path)
+		// log.Info("[chunk_manager]{Deserialize} master restores file: ", sci.Path)
 		fi := new(fileInfo)
 		for _, pci := range sci.Info {
 			fi.handles = append(fi.handles, pci.Handle)
@@ -78,6 +81,7 @@ func (cm *chunkManager) Deserialize(scis []serialChunkInfo) error {
 				version:  pci.Version,
 				checksum: pci.Checksum,
 			}
+			// log.Info("[chunk_manager]{Deserialize} chunk handle: ", pci.Handle, " version: ", pci.Version)
 		}
 		cm.numChunkHandle += gfs.ChunkHandle(len(sci.Info))
 		cm.files[sci.Path] = fi
@@ -90,7 +94,7 @@ func newChunkManager() *chunkManager {
 		chunks: make(map[gfs.ChunkHandle]*chunkInfo),
 		files:  make(map[gfs.Path]*fileInfo),
 	}
-	log.Info("################# new chunk manager #################")
+	// log.Info("################# new chunk manager #################")
 	return cm
 }
 
@@ -117,9 +121,11 @@ func (cm *chunkManager) RegisterReplica(handle gfs.ChunkHandle, addr gfs.ServerA
 
 // GetReplicas returns the replicas of a chunk
 func (cm *chunkManager) GetReplicas(handle gfs.ChunkHandle) ([]gfs.ServerAddress, error) {
+	// log.Info("[chunk_manager]{GetReplicas} enter function, handle: ", handle)
 	cm.RLock()
 	ci, ok := cm.chunks[handle]
 	cm.RUnlock()
+	// log.Info("[chunk_manager]{GetReplicas} handle: ", handle, "; path: ", ci.path, "; location: ", ci.location, "; primary: ", ci.primary)
 	if !ok {
 		return nil, fmt.Errorf("[chunk_manager]{GetReplicas} cannot find chunk %v", handle)
 	}
@@ -271,7 +277,7 @@ func (cm *chunkManager) RemoveChunk(handles []gfs.ChunkHandle, server gfs.Server
 		num := len(ci.location)
 		ci.Unlock()
 
-		if num < gfs.MinimumNumReplicas {
+		if num <= gfs.MinimumNumReplicas {
 			cm.replicaNeededList = append(cm.replicaNeededList, handle)
 			if num == 0 {
 				errList += fmt.Sprintf("[chunk_manager]{RemoveChunk} chunk %v has no replica\n", handle)

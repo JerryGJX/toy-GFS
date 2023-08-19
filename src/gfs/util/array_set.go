@@ -2,7 +2,8 @@ package util
 
 import (
 	"math/rand"
-	"sync"
+	// "sync"
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 // ArraySet is a set implemented using array. I suppose it'll provide better

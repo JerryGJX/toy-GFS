@@ -2,8 +2,10 @@ package chunkserver
 
 import (
 	"fmt"
-	"sync"
+	// "sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	"gfs"
 )

@@ -2,7 +2,8 @@ package master
 
 import (
 	// "fmt"
-	"encoding/gob"
+	// "encoding/gob"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/rpc"
@@ -40,28 +41,59 @@ type PersistentMetaData struct {
 	SeChunkInfo []serialChunkInfo
 }
 
+func ReadRawContent(filePath string) []byte {
+	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
+	if err != nil {
+		return nil
+	}
+	defer file.Close()
+
+	var content []byte
+	_, err = fmt.Fscan(file, &content)
+	if err != nil {
+		return nil
+	}
+	return content
+}
+
+
 func (m *Master) loadMetaData() error {
 	filePath := path.Join(m.serverRoot, MetaDataFileName)
-	log.Info("[master]{loadMetaData}enter function: load metadata from ", filePath) 
+	//to check if the file exists
+	// fi, err := os.Stat(filePath)
+	// if err == nil{
+	// log.Info("[master]{loadMetaData}enter function: if file exists: ", os.IsNotExist(err), "; ", os.IsExist(err), "; file.Size = ", fi.Size())
+
+	// time.Sleep(10 * time.Minute)
+	// }
+	// log.Info("[master]{loadMetaData}enter function: load metadata from ", filePath)
+	// rawContent:= ReadRawContent(filePath)
+	
+	// log.Info("[master]{loadMetaData} raw content: ", string(rawContent))
+
 	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
+	
 	var metadata PersistentMetaData
 
-	err = gob.NewDecoder(file).Decode(&metadata)
+	dec := json.NewDecoder(file)
+	err = dec.Decode(&metadata)
+	log.Info("[master]{loadMetaData} metadata: ", metadata)
 	if err != nil {
 		return err
 	}
 	m.nm.Deserialize(metadata.SeNamespace)
 	m.cm.Deserialize(metadata.SeChunkInfo)
-	log.Info("[master]{loadMetaData} namespace: ", metadata.SeNamespace)
+	// log.Info("[master]{loadMetaData} namespace: ", metadata.SeNamespace)
 	return nil
 }
 
 func (m *Master) storeMetaData() error {
+
 	filePath := path.Join(m.serverRoot, MetaDataFileName)
 	log.Info("[master]{storeMetaData}enter function: store metadata to ", filePath)
 	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
@@ -75,15 +107,34 @@ func (m *Master) storeMetaData() error {
 
 	metadata.SeNamespace = m.nm.Serialize()
 
-	log.Info("[master]{storeMetaData} namespace: ", metadata.SeNamespace)
+	// log.Info("[master]{storeMetaData} namespace: ", metadata.SeNamespace)
 	metadata.SeChunkInfo = m.cm.Serialize()
 
-	log.Info("[master]{storeMetaData} chunkinfo: ", metadata.SeChunkInfo)
+	// log.Info("[master]{storeMetaData} chunkinfo: ", metadata.SeChunkInfo)
 
-	err = gob.NewEncoder(file).Encode(metadata)
+
+	json_data, err := json.Marshal(metadata)
+	if err != nil {
+		log.Warning("[master]{storeMetaData} error: ", err)
+		return err
+	}
+	log.Info("[master]{storeMetaData} json data: ", string(json_data))
+
+
+	log.Info("[master]{storeMetaData} metadata: ", metadata)
+
+	enc := json.NewEncoder(file)
+	err = enc.Encode(metadata)
+	// log.Info("[master]{storeMetaData} raw metadata: ", metadata)
 	if err != nil {
 		log.Warning("[master]{storeMetaData} error: ", err)
 	}
+	// var fi os.FileInfo
+	// fi, err = os.Stat(filePath)
+	// log.Info("[master]{storeMetaData}enter function: if file exists: ", os.IsNotExist(err), "; ", os.IsExist(err), "; file.Size = ", fi.Size())
+	// if err != nil {
+	// 	log.Warning("[master]{storeMetaData} error: ", err)
+	// }
 	return err
 }
 
@@ -91,7 +142,7 @@ func (m *Master) initMetaData() {
 	m.nm = newNamespaceManager()
 	m.cm = newChunkManager()
 	m.csm = newChunkServerManager()
-	log.Info("[master]{initMetaData} init namespace and chunkmanager")
+	// log.Info("[master]{initMetaData} init namespace and chunkmanager")
 	m.loadMetaData()
 }
 
@@ -114,14 +165,14 @@ func (m *Master) serverCheck() error {
 
 	handles := m.cm.GetReplicaNeededList()
 	if handles != nil {
-		log.Info("[master]{serverCheck} replica needed list: ", handles)
+		// log.Info("[master]{serverCheck} replica needed list: ", handles)
 		m.cm.Lock()
 		for i := 0; i < len(handles); i++ {
 			ck := m.cm.chunks[handles[i]]
 			if ck.expire.Before(time.Now()) {
 				ck.Lock()
-				err := m.reReplication(handles[i])
-				log.Info("[master]{serverCheck} reReplication ", handles[i], err)
+				_ = m.reReplication(handles[i])
+				// log.Info("[master]{serverCheck} reReplication ", handles[i], err)
 				ck.Unlock()
 			}
 		}
@@ -157,6 +208,7 @@ func (m *Master) reReplication(handle gfs.ChunkHandle) error {
 // --------------interface----------------
 // NewAndServe starts a master and returns the pointer to it.
 func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
+	log.Info("[master]{NewAndServe} enter function: ", address, "; server root: ", serverRoot)
 	m := &Master{
 		address:    address,
 		serverRoot: serverRoot,
@@ -221,22 +273,27 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 		}
 	}()
 
-	log.Infof("[master]{NewAndServer} Master is running now. addr = %v, root path = %v", address, serverRoot)
+	// log.Infof("[master]{NewAndServer} Master is running now. addr = %v, root path = %v", address, serverRoot)
 
 	return m
 }
 
 // Shutdown shuts down master
 func (m *Master) Shutdown() {
+	filePath := path.Join(m.serverRoot, MetaDataFileName)
+	rawContent:= ReadRawContent(filePath)
+	log.Info("[master]{Shutdown} raw content: ", string(rawContent))
 	if !m.dead {
 		log.Warning("[master]{Shutdown} Shutting down master at ", m.address)
 		m.dead = true
 		close(m.shutdown)
 		m.l.Close()
+		// log.Info("[master]{Shutdown} m.dead: ", m.dead, "; m.l: ", m.l)
 	}
 
 	log.Info("[master]{Shutdown} Storing metadata")
 	err := m.storeMetaData()
+	
 	if err != nil {
 		log.Warning("[master]{Shutdown} Error when storing metadata ", err)
 	}
@@ -252,7 +309,8 @@ func (m *Master) BackgroundActivity() error {
 // RPCHeartbeat is called by chunkserver to let the master know that a chunkserver is alive.
 // Lease extension request is included.
 func (m *Master) RPCHeartbeat(args gfs.HeartbeatArg, reply *gfs.HeartbeatReply) error {
-	log.Info("[master]{RPCHeartbeat} enter")
+
+	// log.Info("[master]{RPCHeartbeat} enter, master.dead: ", m.dead, "; serveraddress: ", args.Address)
 	isNew := m.csm.Heartbeat(args.Address)
 
 	for _, handle := range args.LeaseExtensions {
@@ -261,8 +319,10 @@ func (m *Master) RPCHeartbeat(args gfs.HeartbeatArg, reply *gfs.HeartbeatReply) 
 	}
 
 	if isNew { //if the chunkserver is new, then we need to let it report all the chunks it has
+		// log.Info("[master]{RPCHeartbeat} new chunkserver: ", args.Address)
 		var rep gfs.ReportSelfReply
 		err := util.Call(args.Address, "ChunkServer.RPCReportSelf", gfs.ReportSelfArg{}, &rep)
+		// log.Info("[master]{RPCHeartbeat} report self reply: ", rep.Chunks)
 		if err != nil {
 			return err
 		}
@@ -272,11 +332,13 @@ func (m *Master) RPCHeartbeat(args gfs.HeartbeatArg, reply *gfs.HeartbeatReply) 
 			version := m.cm.chunks[pci.Handle].version
 			m.cm.RUnlock()
 
+			// log.Info("[master]{RPCHeartbeat} chunk ", pci.Handle, " server address num: ")
 			if pci.Version == version {
 				m.cm.RegisterReplica(pci.Handle, args.Address, true)
 				m.csm.AddChunk([]gfs.ServerAddress{args.Address}, pci.Handle)
 			} else {
-				log.Warning("[master]{RPCHeartbeat} chunk ", pci.Handle, " version mismatch")
+
+				log.Warning("[master]{RPCHeartbeat} chunk ", pci.Handle, " version mismatch: ", pci.Version, " vs ", version, " server address: ", args.Address)
 			}
 		}
 	}
@@ -298,6 +360,7 @@ func (m *Master) RPCGetPrimaryAndSecondaries(args gfs.GetPrimaryAndSecondariesAr
 
 // RPCGetReplicas is called by client to find all chunkservers that hold the chunk.
 func (m *Master) RPCGetReplicas(args gfs.GetReplicasArg, reply *gfs.GetReplicasReply) error {
+	// log.Info("[master]{RPCGetReplicas} enter")
 	servers, err := m.cm.GetReplicas(args.Handle)
 	if err != nil {
 		return err
@@ -308,6 +371,7 @@ func (m *Master) RPCGetReplicas(args gfs.GetReplicasArg, reply *gfs.GetReplicasR
 
 // RPCCreateFile is called by client to create a new file
 func (m *Master) RPCCreateFile(args gfs.CreateFileArg, replay *gfs.CreateFileReply) error {
+	// log.Info("[master]{RPCCreateFile} enter")
 	args.Path = gfs.PathFormalizer(args.Path, false)
 	err := m.nm.Create(args.Path)
 	return err
@@ -322,6 +386,7 @@ func (m *Master) RPCMkdir(args gfs.MkdirArg, reply *gfs.MkdirReply) error {
 
 // RPCGetFileInfo is called by client to get file information
 func (m *Master) RPCGetFileInfo(args gfs.GetFileInfoArg, reply *gfs.GetFileInfoReply) error {
+	log.Info("[master]{RPCGetFileInfo} enter, path: ", args.Path)
 	args.Path = gfs.PathFormalizer(args.Path, false)
 	sp := args.Path.Path2SplitPath()
 	filename := sp.Parts[len(sp.Parts)-1]
@@ -334,12 +399,14 @@ func (m *Master) RPCGetFileInfo(args gfs.GetFileInfoArg, reply *gfs.GetFileInfoR
 	if !ok {
 		return fmt.Errorf("[master]{RPCGetFileInfo} error: %s does not exist", args.Path)
 	}
-	file.Lock()
-	defer file.Unlock()
+	file.RLock()
+	// m.nm.unlockParents(sp)
+	defer file.RUnlock() //todo: to understand why this locking sequence is needed
 
 	reply.IsDir = file.isDir
 	reply.Length = file.length
 	reply.Chunks = file.chunks
+	// file.RUnlock()
 	return nil
 }
 
@@ -363,10 +430,10 @@ func (m *Master) RPCGetChunkHandle(args gfs.GetChunkHandleArg, reply *gfs.GetChu
 	defer file.Unlock()
 
 	if int(args.Index) == int(file.chunks) { //if the index is the next chunk, then create a new chunk
-		log.Info("[master]{RPCGetChunkHandle} create new chunk for file: ", args.Path)
+		// log.Info("[master]{RPCGetChunkHandle} create new chunk for file: ", args.Path)
 		file.chunks++
-		log.Info("[master]{RPCGetChunkHandle} current server list: ", m.csm.servers)
-		addrList, err := m.csm.ChooseServers(gfs.MinimumNumReplicas)
+		// log.Info("[master]{RPCGetChunkHandle} current server list: ", m.csm.servers)
+		addrList, err := m.csm.ChooseServers(gfs.DefaultNumReplicas)
 		if err != nil {
 			return err
 		}
@@ -376,7 +443,7 @@ func (m *Master) RPCGetChunkHandle(args gfs.GetChunkHandleArg, reply *gfs.GetChu
 			log.Warning("[master]{RPCGetChunkHandle} create chunk error ", err)
 		}
 		m.csm.AddChunk(successList, reply.Handle)
-		if len(successList) < gfs.MinimumNumReplicas {
+		if len(successList) <= gfs.MinimumNumReplicas {
 			m.cm.Lock()
 			m.cm.replicaNeededList = append(m.cm.replicaNeededList, reply.Handle)
 			m.cm.Unlock()
@@ -391,6 +458,6 @@ func (m *Master) RPCList(args gfs.ListArg, reply *gfs.ListReply) error {
 	args.Path = gfs.PathFormalizer(args.Path, true)
 	var err error
 	reply.Files, err = m.nm.List(args.Path)
-	log.Info("[master]{RPCList} dir path: ", args.Path, "; files: ", reply.Files)
+	// log.Info("[master]{RPCList} dir path: ", args.Path, "; files: ", reply.Files)
 	return err
 }

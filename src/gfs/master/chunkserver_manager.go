@@ -6,7 +6,8 @@ import (
 	"gfs/util"
 
 	// "gfs/util"
-	"sync"
+	// "sync"
+	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -22,7 +23,7 @@ func newChunkServerManager() *chunkServerManager {
 	csm := &chunkServerManager{
 		servers: make(map[gfs.ServerAddress]*chunkServerInfo),
 	}
-	log.Infof("################ new chunkserver manager ################")
+	// log.Infof("################ new chunkserver manager ################")
 	return csm
 }
 
@@ -33,13 +34,13 @@ type chunkServerInfo struct {
 
 // Hearbeat marks the chunkserver alive for now.
 func (csm *chunkServerManager) Heartbeat(addr gfs.ServerAddress) bool {
-	log.Info("[chunkserver manager]{Heartbeat} enter")
+	// log.Info("[chunkserver manager]{Heartbeat} enter")
 	csm.Lock()
 	defer csm.Unlock()
 
 	csi, ok := csm.servers[addr]
 	if !ok {
-		log.Info("[chunkserver manager]{HeartBeat} new chunkserver: ", addr)
+		// log.Info("[chunkserver manager]{HeartBeat} new chunkserver: ", addr)
 		csm.servers[addr] = &chunkServerInfo{
 			lastHeartbeat: time.Now(),
 			chunks:        make(map[gfs.ChunkHandle]bool),
@@ -54,6 +55,7 @@ func (csm *chunkServerManager) Heartbeat(addr gfs.ServerAddress) bool {
 
 // AddChunk creates a chunk on given chunkservers
 func (csm *chunkServerManager) AddChunk(addrs []gfs.ServerAddress, handle gfs.ChunkHandle) {
+	// log.Info("[chunkserver manager]{AddChunk} enter with addrs = ", addrs, " handle = ", handle)
 	csm.Lock()
 	defer csm.Unlock()
 
@@ -66,6 +68,7 @@ func (csm *chunkServerManager) AddChunk(addrs []gfs.ServerAddress, handle gfs.Ch
 // called when the replicas number of a chunk is less than gfs.MinimumNumReplicas
 // returns two server address, the master will call 'from' to send a copy to 'to'
 func (csm *chunkServerManager) ChooseReReplication(handle gfs.ChunkHandle) (from, to gfs.ServerAddress, err error) {
+	// log.Info("[chunkserver manager]{ChooseReReplication} enter with handle = ", handle)
 	csm.RLock()
 	defer csm.RUnlock()
 
@@ -89,10 +92,13 @@ func (csm *chunkServerManager) ChooseReReplication(handle gfs.ChunkHandle) (from
 // ChooseServers returns servers to store new chunk.
 // It is called when a new chunk is create
 func (csm *chunkServerManager) ChooseServers(num int) ([]gfs.ServerAddress, error) {
+	// log.Info("[chunkserver manager]{ChooseServers} enter with num = ", num)
 	csm.RLock()
+	// log.Info("[chunkserver manager]{ChooseServers} successful lock")
 	defer csm.RUnlock()
 
 	if len(csm.servers) < num {
+		log.Warn("[chunkserver manager]{ChooseServers} failed: no enough chunkservers")
 		return nil, fmt.Errorf("[chunkserver_manager]{ChooseServers} failed: no enough chunkservers; %d < %d", len(csm.servers), num)
 	}
 
@@ -102,17 +108,20 @@ func (csm *chunkServerManager) ChooseServers(num int) ([]gfs.ServerAddress, erro
 	}
 	choose, err := util.Sample(len(all), num)
 	if err != nil {
+		log.Warn("[chunkserver manager]{ChooseServers} failed: ", err)
 		return nil, err
 	}
-	for _, addr := range choose {
-		ret = append(ret, all[addr])
+	for _, index := range choose {
+		ret = append(ret, all[index])
 	}
 
+	// log.Info("[chunkserver manager]{ChooseServers} choose: ", ret)
 	return ret, nil
 }
 
 // DetectDeadServers detects disconnected chunkservers according to last heartbeat time
 func (csm *chunkServerManager) DetectDeadServers() []gfs.ServerAddress {
+	// log.Info("[chunkserver manager]{DetectDeadServers} enter")
 	csm.RLock()
 	defer csm.RUnlock()
 
@@ -129,12 +138,14 @@ func (csm *chunkServerManager) DetectDeadServers() []gfs.ServerAddress {
 // RemoveServers removes metedata of a disconnected chunkserver.
 // It returns the chunks that server holds
 func (csm *chunkServerManager) RemoveServer(addr gfs.ServerAddress) (handles []gfs.ChunkHandle, err error) {
+	// log.Info("[chunkserver manager]{RemoveServer} enter with addr = ", addr)
 	csm.Lock()
-	defer csm.Lock()
+	defer csm.Unlock()
 
 	err = nil
 	csi, ok := csm.servers[addr]
 	if !ok {
+		log.Warning("[chunkserver manager]{RemoveServer} failed: no such chunkserver")
 		err = fmt.Errorf("[chunkserver_manager]{RemoveServer} failed: no such chunkserver")
 		return
 	}

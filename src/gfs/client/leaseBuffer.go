@@ -4,8 +4,11 @@ import (
 	// "bufio"
 	"gfs"
 	"gfs/util"
-	"sync"
+
+	// "sync"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 type leaseBuffer struct {
