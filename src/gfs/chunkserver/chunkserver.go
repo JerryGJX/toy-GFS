@@ -8,9 +8,11 @@ import (
 	"net/rpc"
 	"os"
 	"path"
+
 	// "sync"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 
 	log "github.com/sirupsen/logrus"
 
@@ -31,6 +33,9 @@ type ChunkServer struct {
 	dl                     *downloadBuffer                // expiring download buffer
 	pendingLeaseExtensions *util.ArraySet                 // pending lease extension
 	chunk                  map[gfs.ChunkHandle]*chunkInfo // chunk information
+
+	// for snapshot
+	mutationResist bool
 }
 
 type Mutation struct {
@@ -120,6 +125,7 @@ func NewAndServe(addr, masterAddr gfs.ServerAddress, serverRoot string) *ChunkSe
 		dl:                     newDownloadBuffer(gfs.DownloadBufferExpire, gfs.DownloadBufferTick),
 		pendingLeaseExtensions: new(util.ArraySet),
 		chunk:                  make(map[gfs.ChunkHandle]*chunkInfo),
+		mutationResist:         false, // for snapshot
 	}
 	rpcs := rpc.NewServer()
 	rpcs.Register(cs)
@@ -227,7 +233,7 @@ func (cs *ChunkServer) Shutdown() {
 
 // new version: RPCForwardData is called by either another replica or a client who sends data to the current memory buffer.
 func (cs *ChunkServer) RPCForwardData(args gfs.ForwardDataArg, reply *gfs.ForwardDataReply) error {
-	log.Infof("[chunkserver]{RPCForwardData} server: %v; receive dataID: %v",  cs.address, args.DataID)
+	log.Infof("[chunkserver]{RPCForwardData} server: %v; receive dataID: %v", cs.address, args.DataID)
 	if _, ok := cs.dl.Get(args.DataID); ok {
 		return fmt.Errorf("[chunkserver]{RPCForwardData} error: dataID %v already exist", args.DataID)
 	}
@@ -246,6 +252,12 @@ func (cs *ChunkServer) RPCForwardData(args gfs.ForwardDataArg, reply *gfs.Forwar
 func (cs *ChunkServer) RPCCreateChunk(args gfs.CreateChunkArg, reply *gfs.CreateChunkReply) error {
 	cs.Lock()
 	defer cs.Unlock()
+	if cs.mutationResist {
+		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
+		reply.ErrorCode = gfs.MutationResist
+		return fmt.Errorf("[chunkserver]{RPCCreateChunk} server: %v is in mutation resist mode", cs.address)
+	}
+
 	log.Info("[chunkserver]{RPCCreateChunk} server: ", cs.address, " create chunk: ", args.Handle, " start")
 	if _, ok := cs.chunk[args.Handle]; ok {
 		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " create chunk: ", args.Handle, " already exist")
@@ -285,6 +297,15 @@ func (cs *ChunkServer) RPCReadChunk(args gfs.ReadChunkArg, reply *gfs.ReadChunkR
 // applies chunk write to itself (primary) and asks secondaries to do the same.
 func (cs *ChunkServer) RPCWriteChunk(args gfs.WriteChunkArg, reply *gfs.WriteChunkReply) error {
 	// log.Info("[chunkserver]{RPCWriteChunk} server: ", cs.address, " write chunk: ", args.DataID, " start")
+	cs.RLock()
+	if cs.mutationResist {
+		defer cs.RUnlock()
+		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
+		reply.ErrorCode = gfs.MutationResist
+		return fmt.Errorf("[chunkserver]{RPCWriteChunk} server: %v is in mutation resist mode", cs.address)
+	}
+	cs.RUnlock()
+
 	data, err := cs.dl.GetAndDelete(args.DataID)
 	if err != nil {
 		return err
@@ -331,6 +352,14 @@ func (cs *ChunkServer) RPCWriteChunk(args gfs.WriteChunkArg, reply *gfs.WriteChu
 // If the chunk size after appending the data will excceed the limit,
 // pad current chunk and ask the client to retry on the next chunk.
 func (cs *ChunkServer) RPCAppendChunk(args gfs.AppendChunkArg, reply *gfs.AppendChunkReply) error {
+	cs.RLock()
+	if cs.mutationResist {
+		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
+		reply.ErrorCode = gfs.MutationResist
+		return fmt.Errorf("[chunkserver]{RPCAppendChunk} server: %v is in mutation resist mode", cs.address)
+	}
+	cs.RUnlock()
+
 	data, err := cs.dl.GetAndDelete(args.DataID)
 	if err != nil {
 		return err
@@ -441,6 +470,12 @@ func (cs *ChunkServer) RPCSendCopy(args gfs.SendCopyArg, reply *gfs.SendCopyRepl
 func (cs *ChunkServer) RPCApplyCopy(args gfs.ApplyCopyArg, reply *gfs.ApplyCopyReply) error {
 	handle := args.Handle
 	cs.RLock()
+	if cs.mutationResist {
+		defer cs.RUnlock()
+		log.Warning("[chunkserver]{RPCApplyCopy} server: ", cs.address, " is in mutation resist mode")
+		reply.ErrorCode = gfs.MutationResist
+		return fmt.Errorf("[chunkserver]{RPCApplyCopy} server: %v is in mutation resist mode", cs.address)
+	}
 	ci, ok := cs.chunk[handle]
 	cs.RUnlock()
 	if !ok || ci.abandoned {
@@ -465,7 +500,7 @@ func (cs *ChunkServer) RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.Chec
 	}
 	ci.Lock()
 	defer ci.Unlock()
-	
+
 	log.Info("[chunkserver]{RPCCheckVersion} local version: ", ci.version, " master version: ", args.Version)
 
 	if ci.version+gfs.ChunkVersion(1) == args.Version {
@@ -556,5 +591,20 @@ func (cs *ChunkServer) applyMutation(handle gfs.ChunkHandle, mut *Mutation) erro
 		ci.abandoned = true
 		return err
 	}
+	return nil
+}
+
+// for snapshot
+func (cs *ChunkServer) RPCStartSnapshot(args gfs.StartSnapshotArg, reply *gfs.StartSnapshotReply) error {
+	cs.Lock()
+	cs.mutationResist = true
+	cs.Unlock()
+	return nil
+}
+
+func (cs *ChunkServer) RPCEndSnapshot(args gfs.EndSnapshotArg, reply *gfs.EndSnapshotReply) error {
+	cs.Lock()
+	cs.mutationResist = false
+	cs.Unlock()
 	return nil
 }

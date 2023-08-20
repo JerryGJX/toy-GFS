@@ -42,14 +42,14 @@ func newLeaseBuffer(ms gfs.ServerAddress, tick time.Duration) *leaseBuffer {
 	return ret
 }
 
-func (lm *leaseBuffer) GetLease(handle gfs.ChunkHandle) (*gfs.Lease, error) {
-	lm.Lock()
-	defer lm.Unlock()
-	lease, ok := lm.buffer[handle]
+func (lb *leaseBuffer) GetLease(handle gfs.ChunkHandle) (*gfs.Lease, error) {
+	lb.Lock()
+	defer lb.Unlock()
+	lease, ok := lb.buffer[handle]
 
 	if !ok {
 		var rep gfs.GetPrimaryAndSecondariesReply
-		err := util.Call(lm.master, "Master.RPCGetPrimaryAndSecondaries", gfs.GetPrimaryAndSecondariesArg{Handle: handle}, &rep)
+		err := util.Call(lb.master, "Master.RPCGetPrimaryAndSecondaries", gfs.GetPrimaryAndSecondariesArg{Handle: handle}, &rep)
 		if err != nil {
 			return nil, err
 		}
@@ -58,8 +58,16 @@ func (lm *leaseBuffer) GetLease(handle gfs.ChunkHandle) (*gfs.Lease, error) {
 			Expire:      rep.Expire,
 			Secondaries: rep.Secondaries,
 		}
-		lm.buffer[handle] = lease
+		lb.buffer[handle] = lease
 		return lease, nil
 	}
 	return lease, nil
+}
+
+// for snapshot
+func (lb *leaseBuffer) ClearCache() error {//since invalidate leaseBuffer on lease level need much information from master, so we just clear the cache
+	lb.Lock()
+	defer lb.Unlock()
+	lb.buffer = make(map[gfs.ChunkHandle]*gfs.Lease)
+	return nil
 }

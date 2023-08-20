@@ -461,3 +461,7 @@ func (m *Master) RPCList(args gfs.ListArg, reply *gfs.ListReply) error {
 	// log.Info("[master]{RPCList} dir path: ", args.Path, "; files: ", reply.Files)
 	return err
 }
+
+
+//for snapshot
+func (m *Master) Snapshot()

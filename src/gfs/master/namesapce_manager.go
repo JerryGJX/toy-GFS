@@ -272,3 +272,5 @@ func (nm *namespaceManager) List(p gfs.Path) ([]gfs.PathInfo, error) {
 	}
 	return ls, nil
 }
+
+//for checkpoint

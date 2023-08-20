@@ -192,3 +192,16 @@ type ReportSelfArg struct{
 type ReportSelfReply struct{
 	Chunks []PersistentChunkInfo
 }
+
+// for snapshot
+type StartSnapshotArg struct {	
+}
+
+type StartSnapshotReply struct {
+}
+
+type EndSnapshotArg struct {
+}
+
+type EndSnapshotReply struct {
+}

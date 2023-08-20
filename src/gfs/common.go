@@ -2,6 +2,7 @@ package gfs
 
 import (
 	// "gfs"
+	// "errors"
 	"fmt"
 	"strings"
 	"time"
@@ -108,6 +109,7 @@ const (
 	WriteExceedChunkSize
 	ReadEOF
 	NotAvailableForCopy
+	MutationResist
 )
 
 // extended error type with error code
@@ -148,4 +150,8 @@ const (
 	//for client
 	ClientTimeout   = 2*LeaseExpire + 3*ServerTimeout
 	LeaseBufferTick = 500 * time.Millisecond
+
+	//for snapshot
+	StartSnapshot = true
+	EndSnapshot   = false
 )
