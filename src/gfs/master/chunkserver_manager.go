@@ -7,9 +7,9 @@ import (
 
 	// "gfs/util"
 	// "sync"
-	sync "github.com/sasha-s/go-deadlock"
 	"time"
 
+	sync "github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 

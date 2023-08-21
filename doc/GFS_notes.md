@@ -177,11 +177,11 @@ record append:
 
 #### 3.2.1. metadata
 
-| data type                          | storage                                                      | recovery method                                              |
-| ---------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| file and chunk namespaces          | master's memory & replicated log on the local disk of master and remote machines | 从 log 恢复                                                  |
-| map from files to chunks           | 同上                                                         | 从 log 恢复                                                  |
-| locations of each chunk's replicas | master's memory                                              | master setup 的时候向 chunk-server 询问得到；之后用 hearbeat messages 维护 |
+| data type                          | storage                                                                          | recovery method                                                            |
+| ---------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| file and chunk namespaces          | master's memory & replicated log on the local disk of master and remote machines | 从 log 恢复                                                                |
+| map from files to chunks           | 同上                                                                             | 从 log 恢复                                                                |
+| locations of each chunk's replicas | master's memory                                                                  | master setup 的时候向 chunk-server 询问得到；之后用 hearbeat messages 维护 |
 
 > 为什么 location 要这么维护？
 >
@@ -220,7 +220,7 @@ record append:
 
 
 
-#### 3.2.3. metadata: operation Log
+#### 3.2.3. metadata: operation log
 
 > a historical record of critical metadata changes
 

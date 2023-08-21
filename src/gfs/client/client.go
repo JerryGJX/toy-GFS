@@ -9,7 +9,7 @@ import (
 	"math/rand"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	// log "github.com/sirupsen/logrus"
 )
 
 // Client struct is the GFS client-side driver
@@ -159,7 +159,7 @@ func (c *Client) Write(path gfs.Path, offset gfs.Offset, data []byte) error {
 
 // Append appends data to the file. Offset of the beginning of appended data is returned.
 func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
-	log.Info("[client]{Append} enter function, path: ", path)
+	// log.Info("[client]{Append} enter function, path: ", path)
 	path = gfs.PathFormalizer(path, false)
 	var err error
 	if len(data) > gfs.MaxChunkSize {
@@ -167,13 +167,11 @@ func (c *Client) Append(path gfs.Path, data []byte) (gfs.Offset, error) {
 	}
 	var rep gfs.GetFileInfoReply
 
-
-	log.Info("[client]{Append} try to get file info")
+	// log.Info("[client]{Append} try to get file info")
 	err = util.Call(c.master, "Master.RPCGetFileInfo", gfs.GetFileInfoArg{Path: path}, &rep)
 	if err != nil {
 		return 0, err
 	}
-
 
 	startIndex := gfs.ChunkIndex(rep.Chunks - 1)
 	if startIndex < 0 {
@@ -288,7 +286,7 @@ func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []by
 // Chunk offset of the start of data will be returned if success.
 // len(data) should be within max append size.
 func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, error) {
-	log.Infof("[client]{AppendChunk} enter function, handle: %v; data: %s", handle, data)
+	// log.Infof("[client]{AppendChunk} enter function, handle: %v; data: %s", handle, data)
 	if len(data) > gfs.MaxAppendSize {
 		return 0, gfs.Error{Code: gfs.UnknownError, Err: fmt.Sprintf("len(data) = %v > max append size %v", len(data), gfs.MaxAppendSize)}
 	}
@@ -299,7 +297,7 @@ func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, e
 	}
 	dataID := chunkserver.NewDataID(handle)
 	chain := append(lease.Secondaries, lease.Primary)
-	log.Info("[client]{AppendChunk} chain: ", chain)
+	// log.Info("[client]{AppendChunk} chain: ", chain)
 
 	var rep gfs.ForwardDataReply
 	err = util.Call(chain[0], "ChunkServer.RPCForwardData", gfs.ForwardDataArg{DataID: dataID, Data: data, AddrChain: chain[1:]}, &rep)

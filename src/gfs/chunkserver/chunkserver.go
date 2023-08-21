@@ -233,7 +233,7 @@ func (cs *ChunkServer) Shutdown() {
 
 // new version: RPCForwardData is called by either another replica or a client who sends data to the current memory buffer.
 func (cs *ChunkServer) RPCForwardData(args gfs.ForwardDataArg, reply *gfs.ForwardDataReply) error {
-	log.Infof("[chunkserver]{RPCForwardData} server: %v; receive dataID: %v", cs.address, args.DataID)
+	// log.Infof("[chunkserver]{RPCForwardData} server: %v; receive dataID: %v", cs.address, args.DataID)
 	if _, ok := cs.dl.Get(args.DataID); ok {
 		return fmt.Errorf("[chunkserver]{RPCForwardData} error: dataID %v already exist", args.DataID)
 	}
@@ -258,7 +258,7 @@ func (cs *ChunkServer) RPCCreateChunk(args gfs.CreateChunkArg, reply *gfs.Create
 		return fmt.Errorf("[chunkserver]{RPCCreateChunk} server: %v is in mutation resist mode", cs.address)
 	}
 
-	log.Info("[chunkserver]{RPCCreateChunk} server: ", cs.address, " create chunk: ", args.Handle, " start")
+	// log.Info("[chunkserver]{RPCCreateChunk} server: ", cs.address, " create chunk: ", args.Handle, " start")
 	if _, ok := cs.chunk[args.Handle]; ok {
 		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " create chunk: ", args.Handle, " already exist")
 		return nil
@@ -491,7 +491,7 @@ func (cs *ChunkServer) RPCApplyCopy(args gfs.ApplyCopyArg, reply *gfs.ApplyCopyR
 
 // RPCCheckVersion is called by master to check version and detect stale chunk
 func (cs *ChunkServer) RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.CheckVersionReply) error {
-	log.Info("[chunkserver]{RPCCheckVersion} check version for chunk: ", args.Handle)
+	// log.Info("[chunkserver]{RPCCheckVersion} check version for chunk: ", args.Handle)
 	cs.RLock()
 	ci, ok := cs.chunk[args.Handle]
 	cs.RUnlock()
@@ -501,11 +501,11 @@ func (cs *ChunkServer) RPCCheckVersion(args gfs.CheckVersionArg, reply *gfs.Chec
 	ci.Lock()
 	defer ci.Unlock()
 
-	log.Info("[chunkserver]{RPCCheckVersion} local version: ", ci.version, " master version: ", args.Version)
+	// log.Info("[chunkserver]{RPCCheckVersion} local version: ", ci.version, " master version: ", args.Version)
 
 	if ci.version+gfs.ChunkVersion(1) == args.Version {
 		ci.version++
-		log.Info("[chunkserver]{RPCCheckVersion} chunk ", args.Handle, " version updated to ", ci.version)
+		// log.Info("[chunkserver]{RPCCheckVersion} chunk ", args.Handle, " version updated to ", ci.version)
 		reply.Stale = false
 	} else {
 		log.Warningf("[chunkserver]{RPCCheckVersion} chunk %v version mismatch, local version: %v, master version: %v", args.Handle, ci.version, args.Version)

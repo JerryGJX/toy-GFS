@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"gfs"
 
-	"encoding/json"
+	// "encoding/json"
 
 	// "sync"
 	sync "github.com/sasha-s/go-deadlock"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -20,7 +19,7 @@ type namespaceManager struct {
 type nsTree struct {
 	sync.RWMutex
 
-	name string
+	AbsPath gfs.Path
 
 	// if it is a directory
 	isDir    bool
@@ -35,14 +34,14 @@ type nsTree struct {
 type serialTreeNode struct {
 	IsDir bool
 
-	Name string
+	AbsPath gfs.Path
 
 	Children map[string]int
 	Chunks   int64
 }
 
 func (nm *namespaceManager) tree2array(array *[]serialTreeNode, node *nsTree) int {
-	n := serialTreeNode{IsDir: node.isDir, Chunks: node.chunks, Name: node.name}
+	n := serialTreeNode{IsDir: node.isDir, Chunks: node.chunks, AbsPath: node.AbsPath}
 	if node.isDir {
 		n.Children = make(map[string]int)
 		for k, v := range node.children {
@@ -57,9 +56,9 @@ func (nm *namespaceManager) tree2array(array *[]serialTreeNode, node *nsTree) in
 
 func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTree {
 	n := &nsTree{
-		isDir:  array[index].IsDir,
-		chunks: array[index].Chunks,
-		name:   array[index].Name,
+		isDir:   array[index].IsDir,
+		chunks:  array[index].Chunks,
+		AbsPath: array[index].AbsPath,
 	}
 	if array[index].IsDir {
 		n.children = make(map[string]*nsTree)
@@ -70,29 +69,43 @@ func (nm *namespaceManager) array2tree(array []serialTreeNode, index int) *nsTre
 	return n
 }
 
-func (nm *namespaceManager) Serialize() []serialTreeNode {
-	nm.root.RLock()
-	defer nm.root.RUnlock()
-	// log.Info("[namespace_manager]{Serialize} print children of root: ", nm.root.children)
-	nm.serialIndex = 0
-	var ret []serialTreeNode
-	nm.tree2array(&ret, nm.root)
-	log.Info("[namespace_manager]{Serialize} serialized data: ", ret)
-	json_data, err := json.Marshal(ret)
+func (nm *namespaceManager) Serialize(rootPath gfs.Path) []serialTreeNode { //for snapshot and checkpoint
+	sp := rootPath.Path2SplitPath()
+	cwd, err := nm.lockParents(sp, true)
+	defer nm.unlockParents(sp)
+
 	if err != nil {
 		log.Fatal("[namespace_manager]{Serialize} error: ", err)
 	}
-	log.Info("[namespace_manager]{Serialize} json data: ", string(json_data))
+	cwd.RLock()
+	defer cwd.RUnlock() //to check
+
+	nm.serialIndex = 0
+	var ret []serialTreeNode
+	nm.tree2array(&ret, cwd)
+	// log.Info("[namespace_manager]{Serialize} serialized data: ", ret)
+	// json_data, err := json.Marshal(ret)
+	// if err != nil {
+	// 	log.Fatal("[namespace_manager]{Serialize} error: ", err)
+	// }
+	// log.Info("[namespace_manager]{Serialize} json data: ", string(json_data))
 	return ret
 }
 
-func (nm *namespaceManager) Deserialize(array []serialTreeNode) error {
+func (nm *namespaceManager) CheckpointRecovery(array []serialTreeNode) error { //for recovery only
 	nm.root.Lock()
 	defer nm.root.Unlock()
-	nm.root = nm.array2tree(array, len(array)-1)
+	nm.root = nm.Deserialize(array)
 	// log.Info("[namespace_manager]{Deserialize} print children of root: ", nm.root.children)
-	log.Info("[namespace_manager]{Deserialize} raw data: ", array)
+	// log.Info("[namespace_manager]{Deserialize} raw data: ", array)
 	return nil
+}
+
+func (nm *namespaceManager) Deserialize(array []serialTreeNode) *nsTree { // to deserialize the snapshot
+	ret := nm.array2tree(array, len(array)-1)
+	// log.Info("[namespace_manager]{Deserialize} print children of root: ", nm.root.children)
+	// log.Info("[namespace_manager]{Deserialize} raw data: ", array)
+	return ret
 }
 
 func (nm *namespaceManager) lockParents(sp *gfs.SplitPath, retSelf bool) (*nsTree, error) {
@@ -127,11 +140,11 @@ func (nm *namespaceManager) lockParents(sp *gfs.SplitPath, retSelf bool) (*nsTre
 
 func (nm *namespaceManager) unlockParents(sp *gfs.SplitPath) {
 	ptr := nm.root
-	log.Info("[namespace_manager]{unlockParents} sp= ", sp, "; element num = ", len(sp.Parts))
+	// log.Info("[namespace_manager]{unlockParents} sp= ", sp, "; element num = ", len(sp.Parts))
 	if len(sp.Parts) > 0 {
 		ptr.RUnlock()
 		for _, part := range sp.Parts[:len(sp.Parts)-1] {
-			log.Info("[namespace_manager]{unlockParents} unlock ", part)
+			// log.Info("[namespace_manager]{unlockParents} unlock ", part)
 			c, ok := ptr.children[part]
 			if !ok {
 				log.Fatal("[namespace_manager]{unlockParents} error: path not found, path: ", string(sp.SplitPath2Path()))
@@ -146,7 +159,7 @@ func (nm *namespaceManager) unlockParents(sp *gfs.SplitPath) {
 func newNamespaceManager() *namespaceManager {
 	nm := &namespaceManager{
 		root: &nsTree{isDir: true,
-			children: make(map[string]*nsTree), name: "/"},
+			children: make(map[string]*nsTree), AbsPath: "/"},
 	}
 	// log.Info("#################### new namespace manager ####################")
 	return nm
@@ -176,19 +189,19 @@ func (nm *namespaceManager) Create(p gfs.Path) error {
 		return fmt.Errorf("[namespace_manager]{Create} error: %s already exists", p)
 	}
 
-	ptr.children[filename] = &nsTree{isDir: false, length: 0, chunks: 0, name: filename}
+	ptr.children[filename] = &nsTree{isDir: false, length: 0, chunks: 0, AbsPath: p}
 	return nil
 }
 
 // Mkdir creates a directory on path p. All parents should exist.
 func (nm *namespaceManager) Mkdir(p gfs.Path) error {
-	log.Info("[namespace_manager]{Mkdir} enter, path: ", p)
+	// log.Info("[namespace_manager]{Mkdir} enter, path: ", p)
 	sp := p.Path2SplitPath()
 	if !sp.IsDir {
 		return fmt.Errorf("[namespace_manager]{Mkdir} error: %s is a file", p)
 	}
 	parent_sp, err := sp.ParentSp()
-	log.Info("[namespace_manager]{Mkdir} parent_sp: ", parent_sp)
+	// log.Info("[namespace_manager]{Mkdir} parent_sp: ", parent_sp)
 	if err != nil {
 		return err
 	}
@@ -205,7 +218,7 @@ func (nm *namespaceManager) Mkdir(p gfs.Path) error {
 		return fmt.Errorf("[namespace_manager]{Mkdir} error: %s already exists", p)
 	}
 
-	ptr.children[dirname] = &nsTree{isDir: true, children: make(map[string]*nsTree), name: dirname}
+	ptr.children[dirname] = &nsTree{isDir: true, children: make(map[string]*nsTree), AbsPath: p}
 	return nil
 }
 
@@ -273,4 +286,34 @@ func (nm *namespaceManager) List(p gfs.Path) ([]gfs.PathInfo, error) {
 	return ls, nil
 }
 
-//for checkpoint
+// for snapshot
+func (mn *namespaceManager) listFile(cwd *nsTree) ([]gfs.Path, error) { // the caller will lock the node
+	var ret []gfs.Path
+	for _, val := range cwd.children {
+		if val.isDir {
+			val.RLock()
+			tmp, err := mn.listFile(val)
+			val.RUnlock()
+			if err != nil {
+				return nil, err
+			}
+			ret = append(ret, tmp...)
+		} else {
+			ret = append(ret, val.AbsPath)
+		}
+	}
+	return ret, nil
+}
+
+func (mn *namespaceManager) ListRelatedFile(p gfs.Path) ([]gfs.Path, error) {
+	sp := p.Path2SplitPath()
+	cwd, err := mn.lockParents(sp, true)
+	defer mn.unlockParents(sp)
+	if err != nil {
+		return nil, err
+	}
+	cwd.RLock()
+	defer cwd.RUnlock()
+
+	return mn.listFile(cwd)
+}

@@ -9,18 +9,22 @@ import (
 	"reflect"
 
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
+
+	log "github.com/sirupsen/logrus"
+
 	// "io/ioutil"
 	//"math/rand"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+
 	// "sync"
-	sync "github.com/sasha-s/go-deadlock"
 	"testing"
 	"time"
+
+	sync "github.com/sasha-s/go-deadlock"
 )
 
 var (
@@ -75,12 +79,12 @@ func TestMkdirDeleteList(t *testing.T) {
 	}
 
 	err = m.RPCMkdir(gfs.MkdirArg{"/dir1"}, &gfs.MkdirReply{})
-	
+
 	//debug
 	var l2 gfs.ListReply
 	m.RPCList(gfs.ListArg{"/"}, &l2)
 	t.Log("{TestMkdirDeleteList} files in root path: ", l2.Files)
-	
+
 	if err == nil {
 		t.Error("the same dirctory has been created twice")
 	}
@@ -119,7 +123,7 @@ func TestRPCGetChunkHandle(t *testing.T) {
 
 	// var l gfs.ListReply
 	// m.RPCList(gfs.ListArg{"/"}, &l)
-	// t.Log("{TestRPCGetChunkHandle} files in root path: ", l.Files)
+	// t.log("{TestRPCGetChunkHandle} files in root path: ", l.Files)
 
 	path := gfs.Path("/test1.txt")
 	err := m.RPCGetChunkHandle(gfs.GetChunkHandleArg{path, 0}, &r1)
@@ -589,7 +593,7 @@ func TestShutdownInAppend(t *testing.T) {
 	}
 
 	// restart
-	for i, _ := range cs {
+	for i := range cs {
 		if csAdd[i] == l.Locations[0] || csAdd[i] == l.Locations[1] {
 			ii := strconv.Itoa(i)
 			cs[i] = chunkserver.NewAndServe(csAdd[i], mAdd, path.Join(root, "cs"+ii))
@@ -762,7 +766,7 @@ func TestDiskError(t *testing.T) {
 	fmt.Println("###### Destory two chunkserver's diskes")
 	// destory two server's disk
 	log.Info(l.Locations[:2])
-	for i, _ := range cs {
+	for i := range cs {
 		if csAdd[i] == l.Locations[0] || csAdd[i] == l.Locations[1] {
 			ii := strconv.Itoa(i)
 			os.RemoveAll(path.Join(root, "cs"+ii))
@@ -791,8 +795,8 @@ func TestDiskError(t *testing.T) {
 
 func TestMain(tm *testing.M) {
 	sync.Opts.DeadlockTimeout = time.Millisecond * 100
-	file, _ := os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	log.SetOutput(file)
+	// file, _ := os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY, 0666)
+	// log.SetOutput(file)
 	// create temporary directory
 	var err error
 	root, err = os.MkdirTemp("", "gfs-")

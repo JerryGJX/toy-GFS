@@ -9,6 +9,7 @@ import (
 	"net/rpc"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -32,7 +33,9 @@ type Master struct {
 
 // ------------ persistence ------------
 const (
+	RootPath         = "/"
 	MetaDataFileName = "master_meta"
+	SnapshotDir      = "snapshot_dir"
 	filePerm         = 0755
 )
 
@@ -41,7 +44,7 @@ type PersistentMetaData struct {
 	SeChunkInfo []serialChunkInfo
 }
 
-func ReadRawContent(filePath string) []byte {
+func ReadRawContent(filePath string) []byte { //for debug
 	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
 	if err != nil {
 		return nil
@@ -56,9 +59,8 @@ func ReadRawContent(filePath string) []byte {
 	return content
 }
 
-
 func (m *Master) loadMetaData() error {
-	filePath := path.Join(m.serverRoot, MetaDataFileName)
+	filePath := path.Join(m.serverRoot, SnapshotDir, MetaDataFileName)
 	//to check if the file exists
 	// fi, err := os.Stat(filePath)
 	// if err == nil{
@@ -68,7 +70,7 @@ func (m *Master) loadMetaData() error {
 	// }
 	// log.Info("[master]{loadMetaData}enter function: load metadata from ", filePath)
 	// rawContent:= ReadRawContent(filePath)
-	
+
 	// log.Info("[master]{loadMetaData} raw content: ", string(rawContent))
 
 	file, err := os.OpenFile(filePath, os.O_RDONLY, filePerm)
@@ -77,64 +79,70 @@ func (m *Master) loadMetaData() error {
 	}
 	defer file.Close()
 
-	
 	var metadata PersistentMetaData
 
 	dec := json.NewDecoder(file)
 	err = dec.Decode(&metadata)
-	log.Info("[master]{loadMetaData} metadata: ", metadata)
+	// log.Info("[master]{loadMetaData} metadata: ", metadata)
 	if err != nil {
 		return err
 	}
-	m.nm.Deserialize(metadata.SeNamespace)
+	m.nm.CheckpointRecovery(metadata.SeNamespace)
 	m.cm.Deserialize(metadata.SeChunkInfo)
 	// log.Info("[master]{loadMetaData} namespace: ", metadata.SeNamespace)
 	return nil
 }
 
 func (m *Master) storeMetaData() error {
+	// filePath := path.Join(m.serverRoot, MetaDataFileName)
+	// // log.Info("[master]{storeMetaData}enter function: store metadata to ", filePath)
+	// file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
+	// if err != nil {
+	// 	log.Warning("[master]{storeMetaData} error: ", err)
+	// 	return err
+	// }
+	// defer file.Close()
 
-	filePath := path.Join(m.serverRoot, MetaDataFileName)
-	log.Info("[master]{storeMetaData}enter function: store metadata to ", filePath)
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
-	if err != nil {
-		log.Warning("[master]{storeMetaData} error: ", err)
-		return err
-	}
-	defer file.Close()
+	// var metadata PersistentMetaData
 
-	var metadata PersistentMetaData
+	// metadata.SeNamespace = m.nm.Serialize(RootPath)
 
-	metadata.SeNamespace = m.nm.Serialize()
+	// // log.Info("[master]{storeMetaData} namespace: ", metadata.SeNamespace)
 
-	// log.Info("[master]{storeMetaData} namespace: ", metadata.SeNamespace)
-	metadata.SeChunkInfo = m.cm.Serialize()
+	// var pl []gfs.Path
+	// pl, err = m.nm.ListRelatedFile(RootPath)
+	// if err != nil {
+	// 	log.Warning("[master]{storeMetaData} error: ", err)
+	// 	return err
+	// }
+	// metadata.SeChunkInfo = m.cm.Serialize(pl)
 
-	// log.Info("[master]{storeMetaData} chunkinfo: ", metadata.SeChunkInfo)
+	// // log.Info("[master]{storeMetaData} chunkinfo: ", metadata.SeChunkInfo)
 
+	// // json_data, err := json.Marshal(metadata)
+	// // if err != nil {
+	// // 	log.Warning("[master]{storeMetaData} error: ", err)
+	// // 	return err
+	// // }
+	// // log.Info("[master]{storeMetaData} json data: ", string(json_data))
 
-	json_data, err := json.Marshal(metadata)
-	if err != nil {
-		log.Warning("[master]{storeMetaData} error: ", err)
-		return err
-	}
-	log.Info("[master]{storeMetaData} json data: ", string(json_data))
+	// // log.Info("[master]{storeMetaData} metadata: ", metadata)
 
-
-	log.Info("[master]{storeMetaData} metadata: ", metadata)
-
-	enc := json.NewEncoder(file)
-	err = enc.Encode(metadata)
-	// log.Info("[master]{storeMetaData} raw metadata: ", metadata)
-	if err != nil {
-		log.Warning("[master]{storeMetaData} error: ", err)
-	}
-	// var fi os.FileInfo
-	// fi, err = os.Stat(filePath)
-	// log.Info("[master]{storeMetaData}enter function: if file exists: ", os.IsNotExist(err), "; ", os.IsExist(err), "; file.Size = ", fi.Size())
+	// enc := json.NewEncoder(file)
+	// err = enc.Encode(metadata)
+	// // log.Info("[master]{storeMetaData} raw metadata: ", metadata)
 	// if err != nil {
 	// 	log.Warning("[master]{storeMetaData} error: ", err)
 	// }
+	// // var fi os.FileInfo
+	// // fi, err = os.Stat(filePath)
+	// // log.Info("[master]{storeMetaData}enter function: if file exists: ", os.IsNotExist(err), "; ", os.IsExist(err), "; file.Size = ", fi.Size())
+	// // if err != nil {
+	// // 	log.Warning("[master]{storeMetaData} error: ", err)
+	// // }
+	// return err
+
+	err := m.Snapshot(RootPath, MetaDataFileName)
 	return err
 }
 
@@ -208,7 +216,7 @@ func (m *Master) reReplication(handle gfs.ChunkHandle) error {
 // --------------interface----------------
 // NewAndServe starts a master and returns the pointer to it.
 func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
-	log.Info("[master]{NewAndServe} enter function: ", address, "; server root: ", serverRoot)
+	// log.Info("[master]{NewAndServe} enter function: ", address, "; server root: ", serverRoot)
 	m := &Master{
 		address:    address,
 		serverRoot: serverRoot,
@@ -280,9 +288,9 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 
 // Shutdown shuts down master
 func (m *Master) Shutdown() {
-	filePath := path.Join(m.serverRoot, MetaDataFileName)
-	rawContent:= ReadRawContent(filePath)
-	log.Info("[master]{Shutdown} raw content: ", string(rawContent))
+	// filePath := path.Join(m.serverRoot, MetaDataFileName)
+	// rawContent := ReadRawContent(filePath)
+	// log.Info("[master]{Shutdown} raw content: ", string(rawContent))
 	if !m.dead {
 		log.Warning("[master]{Shutdown} Shutting down master at ", m.address)
 		m.dead = true
@@ -291,9 +299,9 @@ func (m *Master) Shutdown() {
 		// log.Info("[master]{Shutdown} m.dead: ", m.dead, "; m.l: ", m.l)
 	}
 
-	log.Info("[master]{Shutdown} Storing metadata")
+	// log.Info("[master]{Shutdown} Storing metadata")
 	err := m.storeMetaData()
-	
+
 	if err != nil {
 		log.Warning("[master]{Shutdown} Error when storing metadata ", err)
 	}
@@ -386,7 +394,7 @@ func (m *Master) RPCMkdir(args gfs.MkdirArg, reply *gfs.MkdirReply) error {
 
 // RPCGetFileInfo is called by client to get file information
 func (m *Master) RPCGetFileInfo(args gfs.GetFileInfoArg, reply *gfs.GetFileInfoReply) error {
-	log.Info("[master]{RPCGetFileInfo} enter, path: ", args.Path)
+	// log.Info("[master]{RPCGetFileInfo} enter, path: ", args.Path)
 	args.Path = gfs.PathFormalizer(args.Path, false)
 	sp := args.Path.Path2SplitPath()
 	filename := sp.Parts[len(sp.Parts)-1]
@@ -462,6 +470,86 @@ func (m *Master) RPCList(args gfs.ListArg, reply *gfs.ListReply) error {
 	return err
 }
 
+// for snapshot
+func (m *Master) setChunkServerStartSnapshot(chl []gfs.ServerAddress) {
+	var wg sync.WaitGroup
+	for _, addr := range chl {
+		wg.Add(1)
+		go func(csa gfs.ServerAddress) {
+			defer wg.Done()
+			err := util.Call(csa, "ChunkServer.RPCStartSnapshot", gfs.StartSnapshotArg{}, &gfs.StartSnapshotReply{})
+			if err != nil {
+				log.Warning("[master]{setChunkServerStartSnapshot} error: ", err)
+			}
+		}(addr)
+	}
+	wg.Wait()
+}
 
-//for snapshot
-func (m *Master) Snapshot()
+func (m *Master) setChunkServerEndSnapshot(chl []gfs.ServerAddress) {
+	var wg sync.WaitGroup
+	for _, addr := range chl {
+		wg.Add(1)
+		go func(csa gfs.ServerAddress) {
+			defer wg.Done()
+			err := util.Call(csa, "ChunkServer.RPCEndSnapshot", gfs.EndSnapshotArg{}, &gfs.EndSnapshotReply{})
+			if err != nil {
+				log.Warning("[master]{setChunkServerEndSnapshot} error: ", err)
+			}
+		}(addr)
+	}
+	wg.Wait()
+}
+
+func (m *Master) Snapshot(rootPath gfs.Path, storageFileName string) error {
+	dirPath := path.Join(m.serverRoot, SnapshotDir)
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err = os.Mkdir(dirPath, filePerm)
+		if err != nil {
+			return err
+		}
+	}
+
+	
+	pl, err := m.nm.ListRelatedFile(rootPath)
+	if err != nil {
+		return err
+	}
+	var chl []gfs.ChunkHandle
+	chl, err = m.cm.GetRelatedChunk(pl)
+	if err != nil {
+		return err
+	}
+	err = m.cm.ClearRelatedLease(chl)
+	if err != nil {
+		return err
+	}
+	var csl []gfs.ServerAddress
+	csl, err = m.cm.GetRelatedChunkServer(chl)
+	if err != nil {
+		return err
+	}
+
+	m.setChunkServerStartSnapshot(csl)
+	defer m.setChunkServerEndSnapshot(csl)
+
+	var snapshotData PersistentMetaData
+	snapshotData.SeNamespace = m.nm.Serialize(rootPath)
+	snapshotData.SeChunkInfo = m.cm.Serialize(pl)
+
+	filePath := path.Join(dirPath, storageFileName)
+
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY, filePerm)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	enc := json.NewEncoder(file)
+	err = enc.Encode(snapshotData)
+	if err != nil {
+		log.Warning("[master]{Snapshot} error: ", err)
+		return err
+	}
+
+	return nil
+}

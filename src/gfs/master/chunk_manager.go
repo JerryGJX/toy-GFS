@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"gfs"
 	"gfs/util"
+	"os"
+
+	// "os"
 
 	// "gfs/util"
 	// "sync"
 	"time"
 
 	sync "github.com/sasha-s/go-deadlock"
-
 	log "github.com/sirupsen/logrus"
 )
 
@@ -45,12 +47,17 @@ type serialChunkInfo struct {
 	Info []gfs.PersistentChunkInfo
 }
 
-func (cm *chunkManager) Serialize() []serialChunkInfo {
+func (cm *chunkManager) Serialize(pl []gfs.Path) []serialChunkInfo {
 	cm.RLock()
 	defer cm.RUnlock()
 
 	var ret []serialChunkInfo
-	for path, fi := range cm.files {
+	for _, p := range pl {
+		fi, ok := cm.files[p]
+		if !ok {
+			log.Warningf("[chunk_manager]{Serialize} cannot find file %v", p)
+			continue
+		}
 		var pcis []gfs.PersistentChunkInfo
 		for _, handle := range fi.handles {
 			pcis = append(pcis, gfs.PersistentChunkInfo{
@@ -59,10 +66,43 @@ func (cm *chunkManager) Serialize() []serialChunkInfo {
 				Version:  cm.chunks[handle].version,
 				Checksum: 0, //todo
 			})
-			// log.Info("[chunk_manager]{Serialize} chunk handle: ", handle, " version: ", cm.chunks[handle].version)
 		}
-		ret = append(ret, serialChunkInfo{Path: path, Info: pcis})
+		ret = append(ret, serialChunkInfo{Path: p, Info: pcis})
 	}
+	// return ret
+
+	// var ret []serialChunkInfo
+	// for p, fi := range cm.files {
+	// 	var pcis []gfs.PersistentChunkInfo
+	// 	for _, handle := range fi.handles {
+	// 		pcis = append(pcis, gfs.PersistentChunkInfo{
+	// 			Handle:   handle,
+	// 			Length:   0,
+	// 			Version:  cm.chunks[handle].version,
+	// 			Checksum: 0, //todo
+	// 		})
+	// 	}
+	// 	ret = append(ret, serialChunkInfo{Path: p, Info: pcis})
+	// }
+
+	var missedFiles []gfs.Path
+	for p := range cm.files {
+		flag := false
+		for _, path := range pl {
+			if p == path {
+				flag = true
+				break
+			}
+		}
+		if !flag {
+			missedFiles = append(missedFiles, p)
+		}
+	}
+	if len(missedFiles) != 0 {
+		log.Error("[chunk_manager]{Serialize} missed files: ", missedFiles)
+		os.Exit(1)
+	}
+
 	return ret
 }
 
@@ -301,4 +341,54 @@ func (cm *chunkManager) GetReplicaNeededList() []gfs.ChunkHandle {
 	} else {
 		return cm.replicaNeededList
 	}
+}
+
+// for snapshot
+// called by master
+func (cm *chunkManager) GetRelatedChunk(pl []gfs.Path) ([]gfs.ChunkHandle, error) {
+	cm.RLock()
+	defer cm.RUnlock()
+	var ret []gfs.ChunkHandle
+	for _, p := range pl {
+		fi, ok := cm.files[p]
+		if !ok {
+			// return nil, fmt.Errorf("[chunk_manager]{GetRelatedChunk} cannot find file %v", p)
+			continue
+		}
+		ret = append(ret, fi.handles...)
+	}
+	return ret, nil
+}
+
+func (cm *chunkManager) ClearRelatedLease(chl []gfs.ChunkHandle) error {
+
+	for _, handle := range chl {
+		cm.RLock()
+		ci, ok := cm.chunks[handle]
+		cm.RUnlock()
+		if !ok {
+			return fmt.Errorf("[chunk_manager]{clearRelatedLease} cannot find chunk %v", handle)
+		}
+		ci.Lock()
+		ci.expire = time.Now()
+		ci.Unlock()
+	}
+	return nil
+}
+
+func (cm *chunkManager) GetRelatedChunkServer(chl []gfs.ChunkHandle) ([]gfs.ServerAddress, error) {
+	cm.RLock()
+	defer cm.RUnlock()
+	var ret []gfs.ServerAddress
+	for _, handle := range chl {
+		ci, ok := cm.chunks[handle]
+		if !ok {
+			return nil, fmt.Errorf("[chunk_manager]{GetRelatedChunkServer} cannot find chunk %v", handle)
+		}
+		for _, addr := range ci.location {
+			ret = append(ret, addr)
+		}
+	}
+	return ret, nil
+
 }
