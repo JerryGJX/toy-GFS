@@ -29,6 +29,9 @@ type Master struct {
 	nm  *namespaceManager
 	cm  *chunkManager
 	csm *chunkServerManager
+
+	//for snapshot
+	MutationForbid bool
 }
 
 // ------------ persistence ------------
@@ -150,7 +153,6 @@ func (m *Master) initMetaData() {
 	m.nm = newNamespaceManager()
 	m.cm = newChunkManager()
 	m.csm = newChunkServerManager()
-	// log.Info("[master]{initMetaData} init namespace and chunkmanager")
 	m.loadMetaData()
 }
 
@@ -192,6 +194,10 @@ func (m *Master) serverCheck() error {
 func (m *Master) reReplication(handle gfs.ChunkHandle) error {
 	//make sure the chunk has been locked outside the function
 	//lock the chunk outside the func will ensure that a new lease will not be granted during the reReplication
+	if m.MutationForbid {
+		return fmt.Errorf("[master]{reReplication} error: mutation is forbidden")
+	}
+
 	from, to, err := m.csm.ChooseReReplication(handle)
 	if err != nil {
 		return err
@@ -263,6 +269,7 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 	go func() {
 		checkTicker := time.Tick(gfs.ServerCheckInterval)
 		storeTicker := time.Tick(gfs.CheckPointInterval)
+		checkpointTicker := time.Tick(gfs.CheckPointInterval)
 
 		for {
 			var err error
@@ -273,6 +280,8 @@ func NewAndServe(address gfs.ServerAddress, serverRoot string) *Master {
 				err = m.serverCheck()
 			case <-storeTicker:
 				err = m.storeMetaData()
+			case <-checkpointTicker:
+				err = m.Snapshot(RootPath, fmt.Sprintf("master_meta_%v", time.Now().Unix()))
 			}
 
 			if err != nil {
@@ -378,8 +387,11 @@ func (m *Master) RPCGetReplicas(args gfs.GetReplicasArg, reply *gfs.GetReplicasR
 }
 
 // RPCCreateFile is called by client to create a new file
-func (m *Master) RPCCreateFile(args gfs.CreateFileArg, replay *gfs.CreateFileReply) error {
+func (m *Master) RPCCreateFile(args gfs.CreateFileArg, reply *gfs.CreateFileReply) error {
 	// log.Info("[master]{RPCCreateFile} enter")
+	if m.MutationForbid {
+		return fmt.Errorf("[master]{RPCCreateFile} error: mutation is forbidden")
+	}
 	args.Path = gfs.PathFormalizer(args.Path, false)
 	err := m.nm.Create(args.Path)
 	return err
@@ -387,6 +399,9 @@ func (m *Master) RPCCreateFile(args gfs.CreateFileArg, replay *gfs.CreateFileRep
 
 // RPCMkdir is called by client to make a new directory
 func (m *Master) RPCMkdir(args gfs.MkdirArg, reply *gfs.MkdirReply) error {
+	if m.MutationForbid {
+		return fmt.Errorf("[master]{RPCMkdir} error: mutation is forbidden")
+	}
 	args.Path = gfs.PathFormalizer(args.Path, true)
 	err := m.nm.Mkdir(args.Path)
 	return err
@@ -472,6 +487,7 @@ func (m *Master) RPCList(args gfs.ListArg, reply *gfs.ListReply) error {
 
 // for snapshot
 func (m *Master) setChunkServerStartSnapshot(chl []gfs.ServerAddress) {
+	m.MutationForbid = true
 	var wg sync.WaitGroup
 	for _, addr := range chl {
 		wg.Add(1)
@@ -487,6 +503,7 @@ func (m *Master) setChunkServerStartSnapshot(chl []gfs.ServerAddress) {
 }
 
 func (m *Master) setChunkServerEndSnapshot(chl []gfs.ServerAddress) {
+	m.MutationForbid = false
 	var wg sync.WaitGroup
 	for _, addr := range chl {
 		wg.Add(1)
@@ -510,7 +527,6 @@ func (m *Master) Snapshot(rootPath gfs.Path, storageFileName string) error {
 		}
 	}
 
-	
 	pl, err := m.nm.ListRelatedFile(rootPath)
 	if err != nil {
 		return err

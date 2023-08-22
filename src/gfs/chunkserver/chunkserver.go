@@ -353,7 +353,9 @@ func (cs *ChunkServer) RPCWriteChunk(args gfs.WriteChunkArg, reply *gfs.WriteChu
 // pad current chunk and ask the client to retry on the next chunk.
 func (cs *ChunkServer) RPCAppendChunk(args gfs.AppendChunkArg, reply *gfs.AppendChunkReply) error {
 	cs.RLock()
+
 	if cs.mutationResist {
+		defer cs.RUnlock()
 		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
 		reply.ErrorCode = gfs.MutationResist
 		return fmt.Errorf("[chunkserver]{RPCAppendChunk} server: %v is in mutation resist mode", cs.address)

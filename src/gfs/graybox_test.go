@@ -795,8 +795,8 @@ func TestDiskError(t *testing.T) {
 
 func TestMain(tm *testing.M) {
 	sync.Opts.DeadlockTimeout = time.Millisecond * 100
-	// file, _ := os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY, 0666)
-	// log.SetOutput(file)
+	file, _ := os.OpenFile("test.log", os.O_CREATE|os.O_WRONLY, 0666)
+	log.SetOutput(file)
 	// create temporary directory
 	var err error
 	root, err = os.MkdirTemp("", "gfs-")

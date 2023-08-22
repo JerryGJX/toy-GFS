@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/rand"
 	"time"
-
 	// log "github.com/sirupsen/logrus"
 )
 
@@ -275,7 +274,9 @@ func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []by
 	var rep2 gfs.WriteChunkReply
 	err = util.Call(lease.Primary, "ChunkServer.RPCWriteChunk", gfs.WriteChunkArg{DataID: dataID, Offset: offset, Secondaries: lease.Secondaries}, &rep2)
 	if err != nil {
-		// log.Error("[client]{WriteChunk} RPCWriteChunk with error code: ", rep2.ErrorCode)
+		if rep2.ErrorCode == gfs.MutationResist {
+			c.leaseBuf.ClearCache()
+		}
 		return err
 	} else {
 		return nil
@@ -308,6 +309,9 @@ func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, e
 	var rep2 gfs.AppendChunkReply
 	err = util.Call(lease.Primary, "ChunkServer.RPCAppendChunk", gfs.AppendChunkArg{DataID: dataID, Secondaries: lease.Secondaries}, &rep2)
 	if err != nil {
+		if rep2.ErrorCode == gfs.MutationResist {
+			c.leaseBuf.ClearCache()
+		}
 		return -1, gfs.Error{Code: gfs.UnknownError, Err: err.Error()}
 	}
 	if rep2.ErrorCode == gfs.AppendExceedChunkSize {
