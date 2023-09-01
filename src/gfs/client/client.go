@@ -8,7 +8,7 @@ import (
 	"io"
 	"math/rand"
 	"time"
-	// log "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 // Client struct is the GFS client-side driver
@@ -125,7 +125,7 @@ func (c *Client) Write(path gfs.Path, offset gfs.Offset, data []byte) error {
 	startPoint := 0
 	for {
 		index := gfs.ChunkIndex(offset / gfs.MaxChunkSize)
-		chunkOffset := offset % gfs.MaxChunkSize
+		chunkOffset := offset % gfs.MaxChunkSize //the length of data mod by MaxChunkSize
 		handle, err := c.GetChunkHandle(path, index)
 		if err != nil {
 			return err
@@ -273,10 +273,11 @@ func (c *Client) WriteChunk(handle gfs.ChunkHandle, offset gfs.Offset, data []by
 	}
 	var rep2 gfs.WriteChunkReply
 	err = util.Call(lease.Primary, "ChunkServer.RPCWriteChunk", gfs.WriteChunkArg{DataID: dataID, Offset: offset, Secondaries: lease.Secondaries}, &rep2)
+	if rep2.ErrorCode == gfs.MutationResist {
+		log.Info("[client]{WriteChunk} mutation resist, clear cache")
+		c.leaseBuf.ClearCache()
+	}
 	if err != nil {
-		if rep2.ErrorCode == gfs.MutationResist {
-			c.leaseBuf.ClearCache()
-		}
 		return err
 	} else {
 		return nil
@@ -308,10 +309,11 @@ func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, e
 
 	var rep2 gfs.AppendChunkReply
 	err = util.Call(lease.Primary, "ChunkServer.RPCAppendChunk", gfs.AppendChunkArg{DataID: dataID, Secondaries: lease.Secondaries}, &rep2)
+	if rep2.ErrorCode == gfs.MutationResist {
+		log.Info("[client]{AppendChunk} mutation resist, clear cache")
+		c.leaseBuf.ClearCache()
+	}
 	if err != nil {
-		if rep2.ErrorCode == gfs.MutationResist {
-			c.leaseBuf.ClearCache()
-		}
 		return -1, gfs.Error{Code: gfs.UnknownError, Err: err.Error()}
 	}
 	if rep2.ErrorCode == gfs.AppendExceedChunkSize {
@@ -320,23 +322,23 @@ func (c *Client) AppendChunk(handle gfs.ChunkHandle, data []byte) (gfs.Offset, e
 	return rep2.Offset, nil
 }
 
-// -------------------add feature-------------------
-func (c *Client) Delete(path gfs.Path) error {
-	path = gfs.PathFormalizer(path, false)
-	var rep gfs.DeleteFileReply
-	err := util.Call(c.master, "Master.RPCDeleteFile", gfs.DeleteFileArg{Path: path}, &rep)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+// // -------------------add feature-------------------
+// func (c *Client) Delete(path gfs.Path) error {
+// 	path = gfs.PathFormalizer(path, false)
+// 	var rep gfs.DeleteFileReply
+// 	err := util.Call(c.master, "Master.RPCDeleteFile", gfs.DeleteFileArg{Path: path}, &rep)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
-func (c *Client) Rename(path gfs.Path, newPath gfs.Path) error {
-	path = gfs.PathFormalizer(path, false)
-	var rep gfs.RenameFileReply
-	err := util.Call(c.master, "Master.RPCRenameFile", gfs.RenameFileArg{OldPath: path, NewPath: newPath}, &rep)
-	if err != nil {
-		return err
-	}
-	return nil
-}
+// func (c *Client) Rename(path gfs.Path, newPath gfs.Path) error {
+// 	path = gfs.PathFormalizer(path, false)
+// 	var rep gfs.RenameFileReply
+// 	err := util.Call(c.master, "Master.RPCRenameFile", gfs.RenameFileArg{OldPath: path, NewPath: newPath}, &rep)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }

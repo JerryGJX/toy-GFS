@@ -97,54 +97,6 @@ func (m *Master) loadMetaData() error {
 }
 
 func (m *Master) storeMetaData() error {
-	// filePath := path.Join(m.serverRoot, MetaDataFileName)
-	// // log.Info("[master]{storeMetaData}enter function: store metadata to ", filePath)
-	// file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE, filePerm)
-	// if err != nil {
-	// 	log.Warning("[master]{storeMetaData} error: ", err)
-	// 	return err
-	// }
-	// defer file.Close()
-
-	// var metadata PersistentMetaData
-
-	// metadata.SeNamespace = m.nm.Serialize(RootPath)
-
-	// // log.Info("[master]{storeMetaData} namespace: ", metadata.SeNamespace)
-
-	// var pl []gfs.Path
-	// pl, err = m.nm.ListRelatedFile(RootPath)
-	// if err != nil {
-	// 	log.Warning("[master]{storeMetaData} error: ", err)
-	// 	return err
-	// }
-	// metadata.SeChunkInfo = m.cm.Serialize(pl)
-
-	// // log.Info("[master]{storeMetaData} chunkinfo: ", metadata.SeChunkInfo)
-
-	// // json_data, err := json.Marshal(metadata)
-	// // if err != nil {
-	// // 	log.Warning("[master]{storeMetaData} error: ", err)
-	// // 	return err
-	// // }
-	// // log.Info("[master]{storeMetaData} json data: ", string(json_data))
-
-	// // log.Info("[master]{storeMetaData} metadata: ", metadata)
-
-	// enc := json.NewEncoder(file)
-	// err = enc.Encode(metadata)
-	// // log.Info("[master]{storeMetaData} raw metadata: ", metadata)
-	// if err != nil {
-	// 	log.Warning("[master]{storeMetaData} error: ", err)
-	// }
-	// // var fi os.FileInfo
-	// // fi, err = os.Stat(filePath)
-	// // log.Info("[master]{storeMetaData}enter function: if file exists: ", os.IsNotExist(err), "; ", os.IsExist(err), "; file.Size = ", fi.Size())
-	// // if err != nil {
-	// // 	log.Warning("[master]{storeMetaData} error: ", err)
-	// // }
-	// return err
-
 	err := m.Snapshot(RootPath, MetaDataFileName)
 	return err
 }
@@ -331,7 +283,6 @@ func (m *Master) RPCHeartbeat(args gfs.HeartbeatArg, reply *gfs.HeartbeatReply) 
 	isNew := m.csm.Heartbeat(args.Address)
 
 	for _, handle := range args.LeaseExtensions {
-		continue
 		m.cm.ExtendLease(handle, args.Address)
 	}
 

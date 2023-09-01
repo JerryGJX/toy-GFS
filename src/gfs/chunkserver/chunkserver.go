@@ -255,7 +255,7 @@ func (cs *ChunkServer) RPCCreateChunk(args gfs.CreateChunkArg, reply *gfs.Create
 	if cs.mutationResist {
 		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
 		reply.ErrorCode = gfs.MutationResist
-		return fmt.Errorf("[chunkserver]{RPCCreateChunk} server: %v is in mutation resist mode", cs.address)
+		return nil
 	}
 
 	// log.Info("[chunkserver]{RPCCreateChunk} server: ", cs.address, " create chunk: ", args.Handle, " start")
@@ -302,7 +302,7 @@ func (cs *ChunkServer) RPCWriteChunk(args gfs.WriteChunkArg, reply *gfs.WriteChu
 		defer cs.RUnlock()
 		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
 		reply.ErrorCode = gfs.MutationResist
-		return fmt.Errorf("[chunkserver]{RPCWriteChunk} server: %v is in mutation resist mode", cs.address)
+		return nil
 	}
 	cs.RUnlock()
 
@@ -358,7 +358,7 @@ func (cs *ChunkServer) RPCAppendChunk(args gfs.AppendChunkArg, reply *gfs.Append
 		defer cs.RUnlock()
 		log.Warning("[chunkserver]{RPCCreateChunk} server: ", cs.address, " is in mutation resist mode")
 		reply.ErrorCode = gfs.MutationResist
-		return fmt.Errorf("[chunkserver]{RPCAppendChunk} server: %v is in mutation resist mode", cs.address)
+		return nil //you should return nil, otherwise the reply will not be generated
 	}
 	cs.RUnlock()
 
@@ -476,7 +476,7 @@ func (cs *ChunkServer) RPCApplyCopy(args gfs.ApplyCopyArg, reply *gfs.ApplyCopyR
 		defer cs.RUnlock()
 		log.Warning("[chunkserver]{RPCApplyCopy} server: ", cs.address, " is in mutation resist mode")
 		reply.ErrorCode = gfs.MutationResist
-		return fmt.Errorf("[chunkserver]{RPCApplyCopy} server: %v is in mutation resist mode", cs.address)
+		return nil
 	}
 	ci, ok := cs.chunk[handle]
 	cs.RUnlock()
